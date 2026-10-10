@@ -367,7 +367,7 @@ def diagnose_blocking_constraint(parsed_data: ParsedData) -> str:
 
     # 8. General constraint clash
     return (
-        "Simultaneous faculty, room, and consecutive-slot availability limits prevent any conflict-free schedule."
+        "Exact blocking constraint could not be isolated automatically; mutual conflict across simultaneous faculty availability, room exclusivity, or consecutive-period constraints prevents a conflict-free schedule."
     )
 
 

@@ -1,0 +1,64 @@
+======================================================================
+       Conflict-Free Weekly Timetable Generator - Timetable Output
+======================================================================
+Search Status:      OPTIMAL
+Idle Gaps:          0 idle gaps
+Overall Outcome:    SUCCESSFUL (Conflict-Free)
+======================================================================
+
+======================================================================
+                    GENERATED TIMETABLE GRID
+======================================================================
+
+--- Timetable for Class Group: X ---
+Day    |        Period 1        |        Period 2        |        Period 3       
+-------+------------------------+------------------------+-----------------------
+D1     |      LAB (F2, L1)      |      LAB (F2, L1)      |      TH (F1, R1)      
+D2     |      TH (F1, R1)       |          ---           |          ---          
+
+--- Timetable for Class Group: Y ---
+Day    |        Period 1        |        Period 2        |        Period 3       
+-------+------------------------+------------------------+-----------------------
+D1     |      TH (F1, R1)       |      TH (F1, R1)       |          ---          
+D2     |      LAB (F3, L1)      |      LAB (F3, L1)      |          ---
+
+======================================================================
+                 SCHEDULING SUMMARY REPORT
+======================================================================
+
+1. Search & Optimization Outcome:
+   - Search Status:     OPTIMAL
+   - Initial Solution:  0 gaps
+   - Optimized Gaps:    0 idle gaps
+   - Optimality Status: PROVEN (Global Minimum)
+   - Diagnostics:       Optimal conflict-free timetable found with 0 idle gaps. (Explored 6 search nodes)
+
+2. Theory Subjects:
+   - Total Required:    4 periods
+   - Total Scheduled:   4 periods
+   - Total Unscheduled: 0 periods
+
+3. Laboratory Subjects:
+   - Total Required:    4 periods
+   - Total Scheduled:   4 periods
+   - Total Unscheduled: 0 periods
+
+4. Overall Timetable Summary:
+   - Total Required:    8 periods
+   - Total Scheduled:   8 periods
+   - Total Unscheduled: 0 periods
+   - Final Status:      COMPLETE (Conflict-Free)
+
+5. Detailed Breakdown by Subject:
+   - [X] TH    (Theory) | Faculty: F1  | 2/2 placed [COMPLETED]
+     Note: All required periods successfully scheduled
+   - [X] LAB   (Lab   ) | Faculty: F2  | 2/2 placed [COMPLETED]
+     Note: All required periods successfully scheduled
+   - [Y] TH    (Theory) | Faculty: F1  | 2/2 placed [COMPLETED]
+     Note: All required periods successfully scheduled
+   - [Y] LAB   (Lab   ) | Faculty: F3  | 2/2 placed [COMPLETED]
+     Note: All required periods successfully scheduled
+
+======================================================================
+                         END OF REPORT
+======================================================================

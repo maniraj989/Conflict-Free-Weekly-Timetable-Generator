@@ -53,10 +53,25 @@ def main() -> None:
         print("Step 8: Backtracking, Forward Checking & Gap Optimization")
         print("=" * 70)
 
+        # Parse output file if specified via --output or -o
+        output_file = "timetable_output.txt"
+        skip_next = False
+        non_flag_args = []
+        for i, arg in enumerate(sys.argv[1:], start=1):
+            if skip_next:
+                skip_next = False
+                continue
+            if arg in ("--output", "-o"):
+                if i + 1 < len(sys.argv):
+                    output_file = sys.argv[i + 1]
+                    skip_next = True
+                continue
+            if not arg.startswith("-"):
+                non_flag_args.append(arg)
+
         # File argument if provided alongside --schedule, otherwise sample input
-        file_args = [a for a in sys.argv[1:] if not a.startswith("-")]
-        if file_args:
-            file_path = file_args[0]
+        if non_flag_args:
+            file_path = non_flag_args[0]
             try:
                 with open(file_path, "r", encoding="utf-8") as f:
                     input_text = f.read()
@@ -76,6 +91,7 @@ def main() -> None:
         from scheduler import (
             print_scheduling_report,
             print_timetable_grid,
+            save_timetable_output,
             schedule_timetable,
         )
 
@@ -96,6 +112,10 @@ def main() -> None:
         )
         print(f"Status: {status_msg}")
         print("=" * 70)
+
+        # Save timetable and report to output file
+        save_timetable_output(output_file, timetable, report)
+        print(f"\n[Info: Timetable output saved to '{output_file}']")
         return
 
     # 3. Default Mode: Input Parsing & Summary (--sample or piped input)

@@ -452,25 +452,26 @@ def schedule_timetable(
     return None, report
 
 
-def print_timetable_grid(timetable: Timetable) -> None:
-    """Print a clean, tabular view of the timetable for each class."""
-    print("\n" + "=" * 70)
-    print("                    GENERATED TIMETABLE GRID")
-    print("=" * 70)
+def format_timetable_grid(timetable: Timetable) -> str:
+    """Format a clean, tabular view of the timetable for each class as a string."""
+    lines: List[str] = []
+    lines.append("=" * 70)
+    lines.append("                    GENERATED TIMETABLE GRID")
+    lines.append("=" * 70)
 
     for class_name, days_dict in timetable.grid.items():
-        print(f"\n--- Timetable for Class Group: {class_name} ---")
+        lines.append(f"\n--- Timetable for Class Group: {class_name} ---")
 
         col_width = 22
         period_headers = [
             f"Period {p}".center(col_width)
             for p in range(1, timetable.periods_per_day + 1)
         ]
-        print(f"{'Day':<6} | " + " | ".join(period_headers))
+        lines.append(f"{'Day':<6} | " + " | ".join(period_headers))
         separator = "-------+-" + "-+-".join(
             ["-" * col_width for _ in range(timetable.periods_per_day)]
         )
-        print(separator)
+        lines.append(separator)
 
         for day in timetable.days:
             row_cells = []
@@ -481,41 +482,49 @@ def print_timetable_grid(timetable: Timetable) -> None:
                 else:
                     cell_text = "---"
                 row_cells.append(cell_text.center(col_width))
-            print(f"{day:<6} | " + " | ".join(row_cells))
+            lines.append(f"{day:<6} | " + " | ".join(row_cells))
+
+    return "\n".join(lines)
 
 
-def print_scheduling_report(report: SchedulingReport) -> None:
-    """Print an organized breakdown of scheduling results and gap optimization diagnostics."""
-    print("\n" + "=" * 70)
-    print("                 SCHEDULING SUMMARY REPORT")
-    print("=" * 70)
+def print_timetable_grid(timetable: Timetable) -> None:
+    """Print a clean, tabular view of the timetable for each class."""
+    print("\n" + format_timetable_grid(timetable))
 
-    print("\n1. Search & Optimization Outcome:")
-    print(f"   - Search Status:     {report.search_status}")
+
+def format_scheduling_report(report: SchedulingReport) -> str:
+    """Format an organized breakdown of scheduling results and gap optimization diagnostics as a string."""
+    lines: List[str] = []
+    lines.append("=" * 70)
+    lines.append("                 SCHEDULING SUMMARY REPORT")
+    lines.append("=" * 70)
+
+    lines.append("\n1. Search & Optimization Outcome:")
+    lines.append(f"   - Search Status:     {report.search_status}")
     if report.best_gaps is not None:
         init_str = f"{report.initial_gaps} gaps" if report.initial_gaps is not None else "N/A"
-        print(f"   - Initial Solution:  {init_str}")
-        print(f"   - Optimized Gaps:    {report.best_gaps} idle gaps")
+        lines.append(f"   - Initial Solution:  {init_str}")
+        lines.append(f"   - Optimized Gaps:    {report.best_gaps} idle gaps")
         if report.gaps_reduced is not None and report.gaps_reduced > 0:
-            print(f"   - Gaps Eliminated:   {report.gaps_reduced} gaps")
+            lines.append(f"   - Gaps Eliminated:   {report.gaps_reduced} gaps")
         opt_str = (
             "PROVEN (Global Minimum)"
             if report.optimality_proven
             else "INCOMPLETE (Search Budget Limited)"
         )
-        print(f"   - Optimality Status: {opt_str}")
+        lines.append(f"   - Optimality Status: {opt_str}")
     if report.diagnostics:
-        print(f"   - Diagnostics:       {report.diagnostics}")
+        lines.append(f"   - Diagnostics:       {report.diagnostics}")
 
-    print("\n2. Theory Subjects:")
-    print(f"   - Total Required:    {report.total_theory_required} periods")
-    print(f"   - Total Scheduled:   {report.total_theory_scheduled} periods")
-    print(f"   - Total Unscheduled: {report.total_theory_unscheduled} periods")
+    lines.append("\n2. Theory Subjects:")
+    lines.append(f"   - Total Required:    {report.total_theory_required} periods")
+    lines.append(f"   - Total Scheduled:   {report.total_theory_scheduled} periods")
+    lines.append(f"   - Total Unscheduled: {report.total_theory_unscheduled} periods")
 
-    print("\n3. Laboratory Subjects:")
-    print(f"   - Total Required:    {report.total_lab_required} periods")
-    print(f"   - Total Scheduled:   {report.total_lab_scheduled} periods")
-    print(f"   - Total Unscheduled: {report.total_lab_unscheduled} periods")
+    lines.append("\n3. Laboratory Subjects:")
+    lines.append(f"   - Total Required:    {report.total_lab_required} periods")
+    lines.append(f"   - Total Scheduled:   {report.total_lab_scheduled} periods")
+    lines.append(f"   - Total Unscheduled: {report.total_lab_unscheduled} periods")
 
     total_req = report.total_theory_required + report.total_lab_required
     total_sched = report.total_theory_scheduled + report.total_lab_scheduled
@@ -523,25 +532,102 @@ def print_scheduling_report(report: SchedulingReport) -> None:
         report.total_theory_unscheduled + report.total_lab_unscheduled
     )
 
-    print("\n4. Overall Timetable Summary:")
-    print(f"   - Total Required:    {total_req} periods")
-    print(f"   - Total Scheduled:   {total_sched} periods")
-    print(f"   - Total Unscheduled: {total_unsched} periods")
+    lines.append("\n4. Overall Timetable Summary:")
+    lines.append(f"   - Total Required:    {total_req} periods")
+    lines.append(f"   - Total Scheduled:   {total_sched} periods")
+    lines.append(f"   - Total Unscheduled: {total_unsched} periods")
     status_label = (
         "COMPLETE (Conflict-Free)" if total_unsched == 0 else f"INCOMPLETE ({report.search_status})"
     )
-    print(f"   - Final Status:      {status_label}")
+    lines.append(f"   - Final Status:      {status_label}")
 
-    print("\n5. Detailed Breakdown by Subject:")
+    lines.append("\n5. Detailed Breakdown by Subject:")
     for status in report.subject_statuses:
         type_str = "Lab" if status.is_lab else "Theory"
         ratio = f"{status.scheduled_periods}/{status.required_periods}"
-        print(
+        lines.append(
             f"   - [{status.class_name}] {status.subject_name:<5} ({type_str:<6}) | "
             f"Faculty: {status.faculty:<3} | {ratio} placed [{status.status}]"
         )
         if status.notes:
-            print(f"     Note: {status.notes}")
+            lines.append(f"     Note: {status.notes}")
+
+    return "\n".join(lines)
+
+
+def print_scheduling_report(report: SchedulingReport) -> None:
+    """Print an organized breakdown of scheduling results and gap optimization diagnostics."""
+    print("\n" + format_scheduling_report(report))
+
+
+def generate_timetable_output_text(
+    timetable: Optional[Timetable], report: SchedulingReport
+) -> str:
+    """Generate the complete text content for the timetable output file.
+
+    Includes:
+    - Search status and idle gap count.
+    - Generated timetable grid (when schedule is successful).
+    - Infeasible / search-limited notice (when schedule is unsuccessful).
+    - Comprehensive summary report with period counts, diagnostics, and subject breakdowns.
+    """
+    sections: List[str] = []
+    sections.append("=" * 70)
+    sections.append("       Conflict-Free Weekly Timetable Generator - Timetable Output")
+    sections.append("=" * 70)
+    sections.append(f"Search Status:      {report.search_status}")
+    if report.best_gaps is not None:
+        sections.append(f"Idle Gaps:          {report.best_gaps} idle gaps")
+    else:
+        sections.append("Idle Gaps:          N/A")
+
+    if report.success and timetable is not None:
+        sections.append("Overall Outcome:    SUCCESSFUL (Conflict-Free)")
+        sections.append("=" * 70)
+        sections.append("")
+        sections.append(format_timetable_grid(timetable).strip())
+    else:
+        sections.append(f"Overall Outcome:    SCHEDULING FAILED ({report.search_status})")
+        if report.diagnostics:
+            sections.append(f"Diagnostics:        {report.diagnostics}")
+        sections.append("=" * 70)
+        sections.append("")
+        sections.append("[NOTICE: No complete timetable grid generated]")
+        if report.search_status == "INFEASIBLE":
+            sections.append("Explanation: The problem constraints cannot be satisfied without conflicts.")
+        elif report.search_status == "LIMIT_REACHED":
+            sections.append("Explanation: Search node budget was exhausted before finding a valid timetable.")
+
+    sections.append("")
+    sections.append(format_scheduling_report(report).strip())
+    sections.append("")
+    sections.append("=" * 70)
+    sections.append("                         END OF REPORT")
+    sections.append("=" * 70)
+    sections.append("")
+
+    return "\n".join(sections)
+
+
+def save_timetable_output(
+    output_path: str,
+    timetable: Optional[Timetable],
+    report: SchedulingReport,
+) -> str:
+    """Save the timetable schedule and report to the specified file.
+
+    Args:
+        output_path: File path to write (e.g. 'timetable_output.txt').
+        timetable: The Timetable object if scheduling succeeded, otherwise None.
+        report: The SchedulingReport containing metrics and diagnostics.
+
+    Returns:
+        The output path written.
+    """
+    text = generate_timetable_output_text(timetable, report)
+    with open(output_path, "w", encoding="utf-8") as f:
+        f.write(text)
+    return output_path
 
 
 def run_scheduler_tests() -> bool:
@@ -551,7 +637,7 @@ def run_scheduler_tests() -> bool:
     print("============================================================\n")
 
     passed_count = 0
-    total_tests = 23
+    total_tests = 30
 
     from models import ClassGroup, Faculty, Room, Subject
     from parser import ParsedData, SAMPLE_INPUT, parse_timetable_input
@@ -1059,6 +1145,176 @@ def run_scheduler_tests() -> bool:
     assert res_budget.timetable.get_assignment("C_LIM", "D1", 2) is None
     print("[PASS] Test 23: Search budget exhaustion safely preserved the best valid timetable found")
     passed_count += 1
+
+    # -------------------------------------------------------------
+    # Test 24: Infeasibility diagnosis - Not enough compatible rooms
+    # -------------------------------------------------------------
+    cg_r1 = ClassGroup(name="C1")
+    cg_r1.add_subject(Subject(name="TH1", faculty="F1", periods_per_week=1, is_lab=False))
+    cg_r2 = ClassGroup(name="C2")
+    cg_r2.add_subject(Subject(name="TH2", faculty="F2", periods_per_week=1, is_lab=False))
+    data_no_room = ParsedData(
+        days=["D1"],
+        periods_per_day=1,
+        classes={"C1": cg_r1, "C2": cg_r2},
+        faculty={"F1": Faculty(name="F1"), "F2": Faculty(name="F2")},
+        rooms={"R1": Room(name="R1", room_type="T")},
+    )
+    res_no_room = backtrack_search(data_no_room)
+    assert res_no_room.status == SearchStatus.INFEASIBLE
+    assert res_no_room.timetable is None
+    assert "room capacity" in res_no_room.message.lower() or "room" in res_no_room.message.lower()
+    print("[PASS] Test 24: Correctly diagnosed infeasibility for insufficient compatible rooms")
+    passed_count += 1
+
+    # -------------------------------------------------------------
+    # Test 25: Infeasibility diagnosis - Lab subject without laboratory room
+    # -------------------------------------------------------------
+    cg_nolab = ClassGroup(name="CX")
+    cg_nolab.add_subject(Subject(name="LAB1", faculty="F1", periods_per_week=2, is_lab=True))
+    data_nolab = ParsedData(
+        days=["D1"],
+        periods_per_day=3,
+        classes={"CX": cg_nolab},
+        faculty={"F1": Faculty(name="F1")},
+        rooms={"R1": Room(name="R1", room_type="T")},
+    )
+    res_nolab = backtrack_search(data_nolab)
+    assert res_nolab.status == SearchStatus.INFEASIBLE
+    assert res_nolab.timetable is None
+    assert "missing laboratory room" in res_nolab.message.lower()
+    print("[PASS] Test 25: Correctly diagnosed infeasibility for missing laboratory room")
+    passed_count += 1
+
+    # -------------------------------------------------------------
+    # Test 26: Infeasibility diagnosis - Insufficient periods for a required lab block
+    # -------------------------------------------------------------
+    cg_short = ClassGroup(name="CX")
+    cg_short.add_subject(Subject(name="LAB1", faculty="F1", periods_per_week=2, is_lab=True))
+    data_short = ParsedData(
+        days=["D1", "D2"],
+        periods_per_day=1,
+        classes={"CX": cg_short},
+        faculty={"F1": Faculty(name="F1")},
+        rooms={"L1": Room(name="L1", room_type="L")},
+    )
+    res_short = backtrack_search(data_short)
+    assert res_short.status == SearchStatus.INFEASIBLE
+    assert res_short.timetable is None
+    assert "less than 2" in res_short.message.lower() or "consecutive" in res_short.message.lower()
+    print("[PASS] Test 26: Correctly diagnosed infeasibility for insufficient periods per day for lab block")
+    passed_count += 1
+
+    # -------------------------------------------------------------
+    # Test 27: Infeasibility diagnosis - Shared-faculty constraints preventing schedule
+    # -------------------------------------------------------------
+    cg_sf1 = ClassGroup(name="C1")
+    cg_sf1.add_subject(Subject(name="TH1", faculty="F_SHARED", periods_per_week=1, is_lab=False))
+    cg_sf2 = ClassGroup(name="C2")
+    cg_sf2.add_subject(Subject(name="TH2", faculty="F_SHARED", periods_per_week=1, is_lab=False))
+    data_sf = ParsedData(
+        days=["D1"],
+        periods_per_day=1,
+        classes={"C1": cg_sf1, "C2": cg_sf2},
+        faculty={"F_SHARED": Faculty(name="F_SHARED")},
+        rooms={"R1": Room(name="R1", room_type="T"), "R2": Room(name="R2", room_type="T")},
+    )
+    res_sf = backtrack_search(data_sf)
+    assert res_sf.status == SearchStatus.INFEASIBLE
+    assert res_sf.timetable is None
+    assert "faculty capacity conflict" in res_sf.message.lower() or "faculty" in res_sf.message.lower()
+    print("[PASS] Test 27: Correctly diagnosed infeasibility for shared-faculty constraints")
+    passed_count += 1
+
+    # -------------------------------------------------------------
+    # Test 28: Search-budget exhaustion distinguishes limit from proven infeasibility
+    # -------------------------------------------------------------
+    res_limit_dist = backtrack_search(sample_data, max_nodes=1)
+    assert res_limit_dist.status == SearchStatus.LIMIT_REACHED
+    assert res_limit_dist.status != SearchStatus.INFEASIBLE
+    assert "search limit reached" in res_limit_dist.message.lower()
+
+    fac_lim2 = Faculty(name="F_LIM2")
+    fac_lim2.mark_available("D1", 1)
+    fac_lim2.mark_available("D1", 3)
+    cg_lim2 = ClassGroup(name="C_LIM2")
+    cg_lim2.add_subject(Subject(name="TH_LIM", faculty="F_LIM2", periods_per_week=2, is_lab=False))
+    data_lim2 = ParsedData(
+        days=["D1"],
+        periods_per_day=3,
+        classes={"C_LIM2": cg_lim2},
+        faculty={"F_LIM2": fac_lim2},
+        rooms={"R1": Room(name="R1", room_type="T")},
+    )
+    res_budget_opt = backtrack_search(data_lim2, max_nodes=3, optimize=True)
+    assert res_budget_opt.status == SearchStatus.FEASIBLE_SEARCH_LIMITED
+    assert res_budget_opt.timetable is not None
+    assert res_budget_opt.optimality_proven is False
+    print("[PASS] Test 28: Verified search-budget exhaustion distinction without claiming infeasibility")
+    passed_count += 1
+
+    # -------------------------------------------------------------
+    # Test 29: Timetable output file generation and content verification
+    # -------------------------------------------------------------
+    import os
+    import tempfile
+
+    tt_out, rep_out = schedule_timetable(sample_data)
+    with tempfile.NamedTemporaryFile("w", delete=False, suffix=".txt") as tmp:
+        tmp_path = tmp.name
+
+    try:
+        saved_path = save_timetable_output(tmp_path, tt_out, rep_out)
+        assert os.path.exists(saved_path)
+        with open(saved_path, "r", encoding="utf-8") as f:
+            content = f.read()
+
+        # Verify class names, days, periods, subjects, faculty, rooms
+        assert "Class Group: X" in content
+        assert "Class Group: Y" in content
+        assert "D1" in content and "D2" in content
+        assert "Period 1" in content and "Period 2" in content and "Period 3" in content
+        assert "TH" in content and "LAB" in content
+        assert "F1" in content and "F2" in content and "F3" in content
+        assert "R1" in content and "L1" in content
+
+        # Verify counts, idle gaps, search status
+        assert "Search Status:      OPTIMAL" in content or "Search Status:     OPTIMAL" in content
+        assert "0 idle gaps" in content
+        assert "Total Required:    8 periods" in content
+        assert "Total Scheduled:   8 periods" in content
+        assert "Total Unscheduled: 0 periods" in content
+        print("[PASS] Test 29: Successfully saved and validated complete timetable output file")
+        passed_count += 1
+    finally:
+        if os.path.exists(tmp_path):
+            os.remove(tmp_path)
+
+    # -------------------------------------------------------------
+    # Test 30: Output file for infeasible schedule does not write successful grid
+    # -------------------------------------------------------------
+    tt_inf, rep_inf = schedule_timetable(data_nolab)
+    assert tt_inf is None
+    assert rep_inf.success is False
+
+    with tempfile.NamedTemporaryFile("w", delete=False, suffix=".txt") as tmp2:
+        tmp_path2 = tmp2.name
+
+    try:
+        saved_path2 = save_timetable_output(tmp_path2, tt_inf, rep_inf)
+        with open(saved_path2, "r", encoding="utf-8") as f:
+            inf_content = f.read()
+
+        assert "SCHEDULING FAILED" in inf_content
+        assert "INFEASIBLE" in inf_content
+        assert "GENERATED TIMETABLE GRID" not in inf_content
+        assert "Missing laboratory room" in inf_content
+        assert "Total Unscheduled: 2 periods" in inf_content
+        print("[PASS] Test 30: Accurately reported infeasible outcome in output file without successful grid")
+        passed_count += 1
+    finally:
+        if os.path.exists(tmp_path2):
+            os.remove(tmp_path2)
 
     print("\n============================================================")
     print(f"Result: All {passed_count}/{total_tests} scheduler & optimization tests passed successfully!")
