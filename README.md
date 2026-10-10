@@ -66,26 +66,50 @@ Next m lines: room_name room_type
 - **`days`**: Number of working days (automatically mapped to labels `D1`, `D2`, etc.).
 - **`periods_per_day`**: Number of periods/slots per day.
 - **`class_name`**: Name/identifier of the student class cohort (e.g. `X`, `Y`).
-- **`subject_name`**: Name of the subject/course (e.g. `TH`, `LAB`).
-- **`faculty_name`**: Name of the instructor. If the same faculty name appears across different classes, they are linked to the same shared `Faculty` entity.
+- **`subject_name`**: Name of the subject/course (e.g. `DSA`, `DSA LAB`, `OS`, `OS LAB`, `APP`, `COA`).
+- **`faculty_name`**: Internal faculty identifier (e.g. `F1`, `F2`, `F3`, `F4`), automatically linked to display names.
 - **`periods_per_week`**: Required weekly periods for this subject (> 0).
 - **`is_lab`**: Flag indicating venue requirement (`0` for Theory classroom, `1` for Laboratory).
 - **`room_name`**: Identifier of the venue (e.g. `R1`, `L1`).
 - **`room_type`**: Venue classification (`T` for Theory classroom, `L` for Laboratory).
 
-### Sample Input:
+### Faculty Registry:
+Configurable mapping between internal faculty IDs and full display names:
+- **`F1`**: Dr.Deena Rose
+- **`F2`**: Dr.V.Mani
+- **`F3`**: Dr.Jegan
+- **`F4`**: Dr.S.Sakthviel
+
+Internal IDs (`F1`, `F2`, etc.) are used for scheduling and conflict detection, while display names are presented in reports and timetable outputs.
+
+### Subject Catalog & Classifications:
+Pre-classified academic courses:
+- **Theory Subjects** (Venue type `T`, standard 1-period scheduling):
+  - `APP`
+  - `COA`
+  - `DSA`
+  - `OS`
+- **Laboratory Subjects** (Venue type `L`, atomic 2-consecutive-period blocks):
+  - `DSA LAB`
+  - `OS LAB`
+
+### Curriculum Configuration Note:
+Real faculty-to-subject assignments and weekly period counts are not assumed or hardcoded. Each student cohort (`ClassGroup`) configures its enrolled subjects, assigned faculty IDs, and required weekly periods. Any subjects not configured for a cohort are reported as unconfigured and remain unscheduled.
+
+### Demonstration Sample Input:
 ```text
 2 3
 4
-X TH F1 2 0
-X LAB F2 2 1
-Y TH F1 2 0
-Y LAB F3 2 1
+X DSA F1 2 0
+X DSA LAB F2 2 1
+Y OS F1 2 0
+Y OS LAB F3 2 1
 3
 R1 T
 R2 T
 L1 L
 ```
+*(Demonstration values: Class X takes DSA with F1 and DSA LAB with F2; Class Y takes OS with F1 and OS LAB with F3. Note: These are example configuration values for testing and demonstration, not confirmed real assignments.)*
 
 ---
 

@@ -218,10 +218,10 @@ def run_validator_tests() -> bool:
     room_r2 = Room(name="R2", room_type="T")
     room_l1 = Room(name="L1", room_type="L")
 
-    sub_th_x = Subject(name="TH", faculty="F1", periods_per_week=2, is_lab=False)
-    sub_lab_x = Subject(name="LAB", faculty="F2", periods_per_week=2, is_lab=True)
-    sub_th_y = Subject(name="TH", faculty="F1", periods_per_week=2, is_lab=False)
-    sub_lab_y = Subject(name="LAB", faculty="F3", periods_per_week=2, is_lab=True)
+    sub_th_x = Subject(name="DSA", faculty="F1", periods_per_week=2, is_lab=False)
+    sub_lab_x = Subject(name="DSA LAB", faculty="F2", periods_per_week=2, is_lab=True)
+    sub_th_y = Subject(name="DSA", faculty="F1", periods_per_week=2, is_lab=False)
+    sub_lab_y = Subject(name="DSA LAB", faculty="F3", periods_per_week=2, is_lab=True)
 
     # -------------------------------------------------------------
     # Test 1: Valid theory assignment
@@ -234,9 +234,9 @@ def run_validator_tests() -> bool:
     passed_count += 1
 
     # Place assignment in timetable for subsequent conflict tests:
-    # Class X has TH with F1 in R1 at D1 Period 1
+    # Class X has DSA with F1 in R1 at D1 Period 1
     timetable.assign(
-        "X", "D1", 1, Assignment(subject="TH", faculty="F1", room="R1")
+        "X", "D1", 1, Assignment(subject="DSA", faculty="F1", room="R1")
     )
 
     # -------------------------------------------------------------
@@ -310,7 +310,7 @@ def run_validator_tests() -> bool:
     # Let's occupy period 3 of Class Y with Room L1
     # -------------------------------------------------------------
     timetable.assign(
-        "Y", "D1", 3, Assignment(subject="LAB", faculty="F3", room="L1")
+        "Y", "D1", 3, Assignment(subject="OS LAB", faculty="F3", room="L1")
     )
     ok, reason = can_place_lab_block(
         timetable, "X", "D1", 2, sub_lab_x, room_l1, fac_f2
