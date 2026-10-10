@@ -50,7 +50,7 @@ def main() -> None:
         print("=" * 70)
         print("       Conflict-Free Weekly Timetable Generator")
         print("=" * 70)
-        print("Step 6: Conflict-Free Scheduler (Theory & Laboratory)")
+        print("Step 7: Backtracking with Forward Checking & MRV Heuristic")
         print("=" * 70)
 
         # File argument if provided alongside --schedule, otherwise sample input
@@ -81,14 +81,18 @@ def main() -> None:
 
         timetable, report = schedule_timetable(parsed_data)
 
-        print_timetable_grid(timetable)
+        if timetable is not None:
+            print_timetable_grid(timetable)
+        else:
+            print("\n[Notice: No complete timetable grid to display]")
+
         print_scheduling_report(report)
 
         print("\n" + "=" * 70)
         status_msg = (
             "Complete weekly timetable generated with zero conflicts!"
             if report.success
-            else "Notice: Some subjects could not be scheduled."
+            else f"Notice: Search ended with status '{report.search_status}'."
         )
         print(f"Status: {status_msg}")
         print("=" * 70)

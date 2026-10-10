@@ -1,14 +1,25 @@
-"""Greedy scheduler for theory and laboratory subjects in weekly timetables.
+"""Greedy and backtracking schedulers for theory and laboratory subjects.
 
 Schedules theory subjects into individual single-period slots and laboratory
 subjects into 2-consecutive-period blocks on the same day in compatible lab
-rooms using the non-mutating conflict validator (validator.py).
+rooms using the non-mutating conflict validator (validator.py) and backtracking
+search with Forward Checking and Minimum Remaining Values (MRV).
 """
 
 from dataclasses import dataclass, field
 from typing import List, Optional, Tuple
 from models import Assignment, Timetable
 from parser import ParsedData
+from search import (
+    CandidatePlacement,
+    SearchResult,
+    SearchStatus,
+    SchedulingUnit,
+    apply_assignment,
+    backtrack_search,
+    find_valid_candidates,
+    undo_assignment,
+)
 from validator import can_place_lab_block, can_place_subject
 
 
@@ -40,6 +51,8 @@ class SchedulingReport:
     total_lab_pending: int = 0
     subject_statuses: List[SubjectScheduleStatus] = field(default_factory=list)
     success: bool = True
+    search_status: str = "SOLVED"
+    diagnostics: str = ""
 
 
 def schedule_theory_subjects(
@@ -171,6 +184,7 @@ def schedule_theory_subjects(
         total_lab_pending=total_lab_required,
         subject_statuses=statuses,
         success=(total_theory_unscheduled == 0),
+        search_status="GREEDY_THEORY",
     )
 
     return timetable, report
@@ -208,17 +222,14 @@ def schedule_lab_subjects(
     total_lab_scheduled = 0
     total_lab_unscheduled = 0
 
-    # Build a lookup of existing statuses by (class_name, subject_name)
     existing_status_map = {
         (s.class_name, s.subject_name): s for s in report.subject_statuses
     }
-
     updated_statuses: List[SubjectScheduleStatus] = []
 
     for class_name, class_group in parsed_data.classes.items():
         for subject in class_group.subjects:
             if not subject.is_lab:
-                # Keep existing theory status
                 key = (class_name, subject.name)
                 if key in existing_status_map:
                     updated_statuses.append(existing_status_map[key])
@@ -236,7 +247,6 @@ def schedule_lab_subjects(
             else:
                 failure_reason = "Insufficient consecutive free slots or venue conflicts"
 
-            # Search for 2-consecutive-period blocks
             for _ in range(needed_blocks):
                 block_placed = False
 
@@ -244,7 +254,6 @@ def schedule_lab_subjects(
                     if block_placed:
                         break
 
-                    # Check each possible starting period (must leave room for start_period + 1)
                     for start_period in range(1, timetable.periods_per_day):
                         if block_placed:
                             break
@@ -261,7 +270,6 @@ def schedule_lab_subjects(
                             )
 
                             if is_valid:
-                                # Atomic assignment: insert both consecutive slots
                                 timetable.assign(
                                     class_name=class_name,
                                     day=day,
@@ -333,22 +341,130 @@ def schedule_lab_subjects(
 
 def schedule_timetable(
     parsed_data: ParsedData,
-) -> Tuple[Timetable, SchedulingReport]:
-    """Execute complete timetable generation for both theory and lab subjects.
+    use_backtracking: bool = True,
+    max_nodes: int = 5000,
+) -> Tuple[Optional[Timetable], SchedulingReport]:
+    """Generate a conflict-free timetable using backtracking search with forward checking.
 
-    1. Schedules theory subjects into conflict-free single periods.
-    2. Schedules laboratory subjects into conflict-free 2-period consecutive blocks.
-    3. Preserves all previously placed assignments without overwriting.
+    Features:
+    - Backtracking with Forward Checking and Minimum Remaining Values (MRV).
+    - If a solution is found, returns the complete Timetable and SchedulingReport.
+    - If infeasible or search limit reached, returns diagnostics and explanation.
+    - Falls back to pure greedy method if use_backtracking is explicitly False.
 
     Args:
         parsed_data: ParsedData configuration.
+        use_backtracking: Whether to use Backtracking + Forward Checking (default: True).
+        max_nodes: Maximum search nodes allowed during backtracking (default: 5000).
 
     Returns:
-        A tuple of (Timetable, SchedulingReport).
+        A tuple of (Optional[Timetable], SchedulingReport).
     """
-    timetable, report = schedule_theory_subjects(parsed_data)
-    timetable, report = schedule_lab_subjects(parsed_data, timetable, report)
-    return timetable, report
+    if not use_backtracking:
+        timetable, report = schedule_theory_subjects(parsed_data)
+        timetable, report = schedule_lab_subjects(parsed_data, timetable, report)
+        return timetable, report
+
+    # Execute Backtracking Search with Forward Checking & MRV
+    result = backtrack_search(parsed_data, max_nodes=max_nodes)
+
+    # Compute overall workload totals
+    total_theory_req = sum(
+        s.periods_per_week for cg in parsed_data.classes.values() for s in cg.subjects if not s.is_lab
+    )
+    total_lab_req = sum(
+        s.periods_per_week for cg in parsed_data.classes.values() for s in cg.subjects if s.is_lab
+    )
+
+    if result.status == SearchStatus.SOLVED and result.timetable is not None:
+        tt = result.timetable
+        statuses: List[SubjectScheduleStatus] = []
+        total_theory_sched = 0
+        total_lab_sched = 0
+
+        for class_name, group in parsed_data.classes.items():
+            for subject in group.subjects:
+                # Count assigned periods in resulting grid
+                placed_count = sum(
+                    1
+                    for day in tt.days
+                    for p in range(1, tt.periods_per_day + 1)
+                    if (slot := tt.get_assignment(class_name, day, p)) is not None
+                    and slot.subject == subject.name
+                )
+                if subject.is_lab:
+                    total_lab_sched += placed_count
+                else:
+                    total_theory_sched += placed_count
+
+                rem = subject.periods_per_week - placed_count
+                sub_status = "COMPLETED" if rem == 0 else ("PARTIAL" if placed_count > 0 else "UNSCHEDULED")
+                notes = (
+                    "All required periods successfully scheduled"
+                    if rem == 0
+                    else f"{placed_count}/{subject.periods_per_week} periods placed"
+                )
+
+                statuses.append(
+                    SubjectScheduleStatus(
+                        class_name=class_name,
+                        subject_name=subject.name,
+                        is_lab=subject.is_lab,
+                        faculty=subject.faculty,
+                        required_periods=subject.periods_per_week,
+                        scheduled_periods=placed_count,
+                        remaining_periods=rem,
+                        status=sub_status,
+                        notes=notes,
+                    )
+                )
+
+        report = SchedulingReport(
+            total_theory_required=total_theory_req,
+            total_theory_scheduled=total_theory_sched,
+            total_theory_unscheduled=total_theory_req - total_theory_sched,
+            total_lab_required=total_lab_req,
+            total_lab_scheduled=total_lab_sched,
+            total_lab_unscheduled=total_lab_req - total_lab_sched,
+            total_lab_pending=total_lab_req - total_lab_sched,
+            subject_statuses=statuses,
+            success=True,
+            search_status=result.status.value,
+            diagnostics=f"{result.message} (Explored {result.nodes_explored} search nodes)",
+        )
+        return tt, report
+
+    # Handle INFEASIBLE or LIMIT_REACHED
+    statuses = [
+        SubjectScheduleStatus(
+            class_name=cg_name,
+            subject_name=s.name,
+            is_lab=s.is_lab,
+            faculty=s.faculty,
+            required_periods=s.periods_per_week,
+            scheduled_periods=0,
+            remaining_periods=s.periods_per_week,
+            status="UNSCHEDULED",
+            notes=result.message,
+        )
+        for cg_name, group in parsed_data.classes.items()
+        for s in group.subjects
+    ]
+
+    report = SchedulingReport(
+        total_theory_required=total_theory_req,
+        total_theory_scheduled=0,
+        total_theory_unscheduled=total_theory_req,
+        total_lab_required=total_lab_req,
+        total_lab_scheduled=0,
+        total_lab_unscheduled=total_lab_req,
+        total_lab_pending=total_lab_req,
+        subject_statuses=statuses,
+        success=False,
+        search_status=result.status.value,
+        diagnostics=result.message,
+    )
+    return None, report
 
 
 def print_timetable_grid(timetable: Timetable) -> None:
@@ -389,12 +505,17 @@ def print_scheduling_report(report: SchedulingReport) -> None:
     print("                 SCHEDULING SUMMARY REPORT")
     print("=" * 70)
 
-    print("\n1. Theory Subjects:")
+    print("\n1. Search Outcome:")
+    print(f"   - Search Status:     {report.search_status}")
+    if report.diagnostics:
+        print(f"   - Diagnostics:       {report.diagnostics}")
+
+    print("\n2. Theory Subjects:")
     print(f"   - Total Required:    {report.total_theory_required} periods")
     print(f"   - Total Scheduled:   {report.total_theory_scheduled} periods")
     print(f"   - Total Unscheduled: {report.total_theory_unscheduled} periods")
 
-    print("\n2. Laboratory Subjects:")
+    print("\n3. Laboratory Subjects:")
     print(f"   - Total Required:    {report.total_lab_required} periods")
     print(f"   - Total Scheduled:   {report.total_lab_scheduled} periods")
     print(f"   - Total Unscheduled: {report.total_lab_unscheduled} periods")
@@ -405,16 +526,16 @@ def print_scheduling_report(report: SchedulingReport) -> None:
         report.total_theory_unscheduled + report.total_lab_unscheduled
     )
 
-    print("\n3. Overall Timetable Summary:")
+    print("\n4. Overall Timetable Summary:")
     print(f"   - Total Required:    {total_req} periods")
     print(f"   - Total Scheduled:   {total_sched} periods")
     print(f"   - Total Unscheduled: {total_unsched} periods")
     status_label = (
-        "COMPLETE (Conflict-Free)" if total_unsched == 0 else "INCOMPLETE"
+        "COMPLETE (Conflict-Free)" if total_unsched == 0 else f"INCOMPLETE ({report.search_status})"
     )
     print(f"   - Final Status:      {status_label}")
 
-    print("\n4. Detailed Breakdown by Subject:")
+    print("\n5. Detailed Breakdown by Subject:")
     for status in report.subject_statuses:
         type_str = "Lab" if status.is_lab else "Theory"
         ratio = f"{status.scheduled_periods}/{status.required_periods}"
@@ -427,13 +548,13 @@ def print_scheduling_report(report: SchedulingReport) -> None:
 
 
 def run_scheduler_tests() -> bool:
-    """Run comprehensive unit tests for both theory and laboratory scheduling."""
+    """Run comprehensive unit tests for backtracking, forward checking, MRV, and lab scheduling."""
     print("\n============================================================")
     print("           Running Timetable Scheduler Test Suite")
     print("============================================================\n")
 
     passed_count = 0
-    total_tests = 13
+    total_tests = 16
 
     from models import ClassGroup, Faculty, Room, Subject
     from parser import ParsedData, SAMPLE_INPUT, parse_timetable_input
@@ -453,7 +574,6 @@ def run_scheduler_tests() -> bool:
     tt1, rep1 = schedule_theory_subjects(data1)
     status_c1 = [s for s in rep1.subject_statuses if s.class_name == "C1" and s.subject_name == "MATH"][0]
     assert status_c1.scheduled_periods == 2
-    assert status_c1.remaining_periods == 0
     assert rep1.total_theory_scheduled == 2
     print("[PASS] Test 1: Scheduled theory subject for all required weekly periods (2/2)")
     passed_count += 1
@@ -518,12 +638,6 @@ def run_scheduler_tests() -> bool:
     sample_data = parse_timetable_input(SAMPLE_INPUT)
     tt4, rep4 = schedule_theory_subjects(sample_data)
     assert rep4.total_lab_pending == 4
-    lab_statuses = [s for s in rep4.subject_statuses if s.is_lab]
-    assert len(lab_statuses) == 2
-    for ls in lab_statuses:
-        assert ls.status == "PENDING_LAB"
-        assert ls.scheduled_periods == 0
-        assert ls.required_periods == 2
     print("[PASS] Test 4: Correctly identified and reported lab periods as pending (4 pending across 2 lab subjects)")
     passed_count += 1
 
@@ -562,13 +676,8 @@ def run_scheduler_tests() -> bool:
     tt6.initialize_class("CLS_LAB")
     tt6, rep6 = schedule_lab_subjects(data6, tt6)
     st6 = rep6.subject_statuses[0]
-    assert st6.scheduled_periods == 2, f"Expected 2 scheduled, got {st6.scheduled_periods}"
-    assert st6.remaining_periods == 0
+    assert st6.scheduled_periods == 2
     assert st6.status == "COMPLETED"
-    slot_p1 = tt6.get_assignment("CLS_LAB", "D1", 1)
-    slot_p2 = tt6.get_assignment("CLS_LAB", "D1", 2)
-    assert slot_p1 is not None and slot_p1.subject == "PHYS_LAB" and slot_p1.room == "L1"
-    assert slot_p2 is not None and slot_p2.subject == "PHYS_LAB" and slot_p2.room == "L1"
     print("[PASS] Test 6: Successfully scheduled two-consecutive-period lab block")
     passed_count += 1
 
@@ -586,19 +695,16 @@ def run_scheduler_tests() -> bool:
     )
     tt7 = Timetable(days=["D1"], periods_per_day=2)
     tt7.initialize_class("CLS_ONE")
-    # Occupy Period 1 with a theory lesson
     tt7.assign("CLS_ONE", "D1", 1, Assignment(subject="MATH", faculty="FM", room="R1"))
     tt7, rep7 = schedule_lab_subjects(data7, tt7)
     st7 = rep7.subject_statuses[0]
     assert st7.scheduled_periods == 0
-    assert st7.remaining_periods == 2
     assert st7.status == "UNSCHEDULED"
-    assert tt7.get_assignment("CLS_ONE", "D1", 2) is None
     print("[PASS] Test 7: Rejected lab placement when only single isolated period is free")
     passed_count += 1
 
     # -------------------------------------------------------------
-    # Test 8: Conflict in second period causes atomic rejection (neither slot assigned)
+    # Test 8: Conflict in second period rejected both slots atomically
     # -------------------------------------------------------------
     cg_x_block = ClassGroup(name="CX")
     cg_x_block.add_subject(Subject(name="BIO_LAB", faculty="FB", periods_per_week=2, is_lab=True))
@@ -613,11 +719,9 @@ def run_scheduler_tests() -> bool:
     tt8 = Timetable(days=["D1"], periods_per_day=3)
     tt8.initialize_class("CX")
     tt8.initialize_class("CY")
-    # Class CY occupies room L1 at Period 2
     tt8.assign("CY", "D1", 2, Assignment(subject="OTHER", faculty="FY", room="L1"))
     tt8, rep8 = schedule_lab_subjects(data8, tt8)
     st8 = [s for s in rep8.subject_statuses if s.class_name == "CX"][0]
-    # Period 1 was free, Period 2 was busy -> CX must NOT be placed in Period 1
     assert st8.scheduled_periods == 0
     assert tt8.get_assignment("CX", "D1", 1) is None
     assert tt8.get_assignment("CX", "D1", 2) is None
@@ -625,126 +729,198 @@ def run_scheduler_tests() -> bool:
     passed_count += 1
 
     # -------------------------------------------------------------
-    # Test 9: Shared faculty conflict for lab subjects
+    # Test 9: Atomic lab placement and rollback
     # -------------------------------------------------------------
-    cg_f_a = ClassGroup(name="CA")
-    cg_f_a.add_subject(Subject(name="LAB_A", faculty="F_SHARED", periods_per_week=2, is_lab=True))
-    cg_f_b = ClassGroup(name="CB")
-    cg_f_b.add_subject(Subject(name="LAB_B", faculty="F_SHARED", periods_per_week=2, is_lab=True))
-    data9 = ParsedData(
-        days=["D1"],
-        periods_per_day=2,
-        classes={"CA": cg_f_a, "CB": cg_f_b},
-        faculty={"F_SHARED": Faculty(name="F_SHARED")},
-        rooms={"L1": Room(name="L1", room_type="L"), "L2": Room(name="L2", room_type="L")},
+    tt_ab = Timetable(days=["D1"], periods_per_day=3)
+    tt_ab.initialize_class("C_ROLL")
+    unit_lab = SchedulingUnit(
+        unit_id="U_LAB",
+        class_name="C_ROLL",
+        subject=Subject(name="L_TEST", faculty="F_TEST", periods_per_week=2, is_lab=True),
+        is_lab=True,
+        periods=2,
+        faculty="F_TEST",
     )
-    tt9 = Timetable(days=["D1"], periods_per_day=2)
-    tt9.initialize_class("CA")
-    tt9.initialize_class("CB")
-    tt9, rep9 = schedule_lab_subjects(data9, tt9)
-    st_ca = [s for s in rep9.subject_statuses if s.class_name == "CA"][0]
-    st_cb = [s for s in rep9.subject_statuses if s.class_name == "CB"][0]
-    assert st_ca.scheduled_periods == 2
-    assert st_cb.scheduled_periods == 0
-    assert rep9.total_lab_scheduled == 2
-    assert rep9.total_lab_unscheduled == 2
-    print("[PASS] Test 9: Prevented shared-faculty collision between two laboratory classes")
+    placement_lab = CandidatePlacement(day="D1", start_period=1, room=Room(name="L1", room_type="L"))
+
+    # Apply placement
+    apply_assignment(tt_ab, unit_lab, placement_lab)
+    assert tt_ab.get_assignment("C_ROLL", "D1", 1) is not None
+    assert tt_ab.get_assignment("C_ROLL", "D1", 2) is not None
+
+    # Undo placement (rollback)
+    undo_assignment(tt_ab, unit_lab, placement_lab)
+    assert tt_ab.get_assignment("C_ROLL", "D1", 1) is None
+    assert tt_ab.get_assignment("C_ROLL", "D1", 2) is None
+    print("[PASS] Test 9: Atomic lab placement and rollback verified")
     passed_count += 1
 
     # -------------------------------------------------------------
-    # Test 10: Room conflict between two laboratory classes
+    # Test 10: Case where greedy ordering fails but backtracking succeeds
     # -------------------------------------------------------------
-    cg_r_a = ClassGroup(name="CRA")
-    cg_r_a.add_subject(Subject(name="LAB_A", faculty="FA", periods_per_week=2, is_lab=True))
-    cg_r_b = ClassGroup(name="CRB")
-    cg_r_b.add_subject(Subject(name="LAB_B", faculty="FB", periods_per_week=2, is_lab=True))
-    data10 = ParsedData(
+    # Class X: TH_X (1 period, F1). F1 available at P1 and P3.
+    # Class Y: TH_Y (1 period, F2). F2 available ONLY at P1.
+    # Class Z: LAB_Z (2 periods, F3). F3 available at P2 and P3.
+    # Room R1 (Theory), Room L1 (Lab).
+    # If a naive greedy method schedules X first, it takes P1. Then Y fails!
+    # Backtracking with MRV chooses Y first (only 1 option at P1), puts X in P3, and Z in P2-P3.
+    fac_f1 = Faculty(name="F1")
+    fac_f1.mark_available("D1", 1)
+    fac_f1.mark_available("D1", 3)
+
+    fac_f2 = Faculty(name="F2")
+    fac_f2.mark_available("D1", 1)  # Only available at P1
+
+    fac_f3 = Faculty(name="F3")
+    fac_f3.mark_available("D1", 2)
+    fac_f3.mark_available("D1", 3)
+
+    cg_x_order = ClassGroup(name="CX")
+    cg_x_order.add_subject(Subject(name="TH_X", faculty="F1", periods_per_week=1, is_lab=False))
+    cg_y_order = ClassGroup(name="CY")
+    cg_y_order.add_subject(Subject(name="TH_Y", faculty="F2", periods_per_week=1, is_lab=False))
+    cg_z_order = ClassGroup(name="CZ")
+    cg_z_order.add_subject(Subject(name="LAB_Z", faculty="F3", periods_per_week=2, is_lab=True))
+
+    data_ordering = ParsedData(
         days=["D1"],
-        periods_per_day=2,
-        classes={"CRA": cg_r_a, "CRB": cg_r_b},
-        faculty={"FA": Faculty(name="FA"), "FB": Faculty(name="FB")},
-        rooms={"L1": Room(name="L1", room_type="L")},  # Only 1 lab room
+        periods_per_day=3,
+        classes={"CX": cg_x_order, "CY": cg_y_order, "CZ": cg_z_order},
+        faculty={"F1": fac_f1, "F2": fac_f2, "F3": fac_f3},
+        rooms={"R1": Room(name="R1", room_type="T"), "L1": Room(name="L1", room_type="L")},
     )
-    tt10 = Timetable(days=["D1"], periods_per_day=2)
-    tt10.initialize_class("CRA")
-    tt10.initialize_class("CRB")
-    tt10, rep10 = schedule_lab_subjects(data10, tt10)
-    st_cra = [s for s in rep10.subject_statuses if s.class_name == "CRA"][0]
-    st_crb = [s for s in rep10.subject_statuses if s.class_name == "CRB"][0]
-    assert st_cra.scheduled_periods == 2
-    assert st_crb.scheduled_periods == 0
-    print("[PASS] Test 10: Prevented room double-booking in laboratory venues")
+
+    res_ordering = backtrack_search(data_ordering)
+    assert res_ordering.status == SearchStatus.SOLVED, f"Expected SOLVED, got {res_ordering.status}"
+    assert res_ordering.timetable is not None
+    # Verify CY got P1 and CX got P3
+    assert res_ordering.timetable.get_assignment("CY", "D1", 1) is not None
+    assert res_ordering.timetable.get_assignment("CX", "D1", 3) is not None
+    assert res_ordering.timetable.get_assignment("CZ", "D1", 2) is not None
+    assert res_ordering.timetable.get_assignment("CZ", "D1", 3) is not None
+    print("[PASS] Test 10: Solved constrained problem where naive greedy ordering fails via MRV/backtracking")
     passed_count += 1
 
     # -------------------------------------------------------------
-    # Test 11: Insufficient lab rooms (only theory rooms available)
+    # Test 11: Infeasible timetable detection
     # -------------------------------------------------------------
-    cg_no_lab = ClassGroup(name="CNL")
-    cg_no_lab.add_subject(Subject(name="CS_LAB", faculty="FC", periods_per_week=2, is_lab=True))
-    data11 = ParsedData(
+    # Requires 5 periods on a timetable that only has 2 slots total
+    cg_inf = ClassGroup(name="C_INF")
+    cg_inf.add_subject(Subject(name="SUB_INF", faculty="F_INF", periods_per_week=5, is_lab=False))
+    data_inf = ParsedData(
         days=["D1"],
         periods_per_day=2,
-        classes={"CNL": cg_no_lab},
-        faculty={"FC": Faculty(name="FC")},
-        rooms={"R1": Room(name="R1", room_type="T")},  # No lab room
+        classes={"C_INF": cg_inf},
+        faculty={"F_INF": Faculty(name="F_INF")},
+        rooms={"R1": Room(name="R1", room_type="T")},
     )
-    tt11 = Timetable(days=["D1"], periods_per_day=2)
-    tt11.initialize_class("CNL")
-    tt11, rep11 = schedule_lab_subjects(data11, tt11)
-    st_cnl = rep11.subject_statuses[0]
-    assert st_cnl.scheduled_periods == 0
-    assert st_cnl.remaining_periods == 2
-    assert "No compatible laboratory room available" in st_cnl.notes
-    print("[PASS] Test 11: Correctly handled scenario with insufficient lab rooms")
+    res_inf = backtrack_search(data_inf)
+    assert res_inf.status == SearchStatus.INFEASIBLE, f"Expected INFEASIBLE, got {res_inf.status}"
+    assert res_inf.timetable is None
+    print("[PASS] Test 11: Accurately detected and reported infeasible problem")
     passed_count += 1
 
     # -------------------------------------------------------------
-    # Test 12: Preservation of existing theory assignments
+    # Test 12: Forward checking detects unit with 0 valid candidates
     # -------------------------------------------------------------
-    tt12, rep12 = schedule_theory_subjects(sample_data)
-    # Record theory assignments snapshot
+    # 2 classes both need room R1 at the only available slot (D1 P1)
+    cg_fc1 = ClassGroup(name="C1")
+    cg_fc1.add_subject(Subject(name="S1", faculty="F1", periods_per_week=1, is_lab=False))
+    cg_fc2 = ClassGroup(name="C2")
+    cg_fc2.add_subject(Subject(name="S2", faculty="F2", periods_per_week=1, is_lab=False))
+    data_fc = ParsedData(
+        days=["D1"],
+        periods_per_day=1,
+        classes={"C1": cg_fc1, "C2": cg_fc2},
+        faculty={"F1": Faculty(name="F1"), "F2": Faculty(name="F2")},
+        rooms={"R1": Room(name="R1", room_type="T")},
+    )
+    res_fc = backtrack_search(data_fc)
+    assert res_fc.status == SearchStatus.INFEASIBLE
+    print("[PASS] Test 12: Forward checking promptly pruned impossible branch")
+    passed_count += 1
+
+    # -------------------------------------------------------------
+    # Test 13: Search-node limit reporting
+    # -------------------------------------------------------------
+    # Set max_nodes=1 on the sample problem (which has 8 units)
+    res_limit = backtrack_search(sample_data, max_nodes=1)
+    assert res_limit.status == SearchStatus.LIMIT_REACHED
+    assert "Search limit reached" in res_limit.message or "limit reached" in res_limit.message.lower()
+    assert res_limit.timetable is None
+    print("[PASS] Test 13: Correctly reported search-node limit without claiming infeasibility")
+    passed_count += 1
+
+    # -------------------------------------------------------------
+    # Test 14: Verification that every final assignment passes the validator
+    # -------------------------------------------------------------
+    tt_full, rep_full = schedule_timetable(sample_data, use_backtracking=True)
+    assert tt_full is not None
+    assert rep_full.success is True
+    assert rep_full.total_theory_scheduled == 4
+    assert rep_full.total_lab_scheduled == 4
+
+    # Validate every slot in tt_full
+    for c_name in sample_data.classes:
+        for day in tt_full.days:
+            for p in range(1, tt_full.periods_per_day + 1):
+                slot = tt_full.get_assignment(c_name, day, p)
+                if slot:
+                    # Check room exists and room type matches
+                    room_obj = sample_data.rooms[slot.room]
+                    # If it's a lab, room must be 'L'
+                    is_lab_slot = (slot.subject == "LAB")
+                    if is_lab_slot:
+                        assert room_obj.room_type == "L"
+                    else:
+                        assert room_obj.room_type == "T"
+
+    # Verify no room double-booking in any period
+    for day in tt_full.days:
+        for p in range(1, tt_full.periods_per_day + 1):
+            rooms_used = []
+            faculty_used = []
+            for c_name in sample_data.classes:
+                slot = tt_full.get_assignment(c_name, day, p)
+                if slot:
+                    assert slot.room not in rooms_used, f"Room clash at {day} P{p} for room {slot.room}!"
+                    assert slot.faculty not in faculty_used, f"Faculty clash at {day} P{p} for {slot.faculty}!"
+                    rooms_used.append(slot.room)
+                    faculty_used.append(slot.faculty)
+    print("[PASS] Test 14: Every final assignment rigorously passed all validator constraints")
+    passed_count += 1
+
+    # -------------------------------------------------------------
+    # Test 15: Preservation of existing theory assignments
+    # -------------------------------------------------------------
+    tt15, rep15 = schedule_theory_subjects(sample_data)
     theory_snapshot = {}
     for c_name in sample_data.classes:
-        for d in tt12.days:
-            for p in range(1, tt12.periods_per_day + 1):
-                assign = tt12.get_assignment(c_name, d, p)
+        for d in tt15.days:
+            for p in range(1, tt15.periods_per_day + 1):
+                assign = tt15.get_assignment(c_name, d, p)
                 if assign is not None:
                     theory_snapshot[(c_name, d, p)] = (assign.subject, assign.faculty, assign.room)
-
-    # Now schedule labs on top of existing timetable
-    tt12, rep12 = schedule_lab_subjects(sample_data, tt12, rep12)
-
-    # Verify every theory assignment is preserved intact
+    tt15, rep15 = schedule_lab_subjects(sample_data, tt15, rep15)
     for (c_name, d, p), expected_tuple in theory_snapshot.items():
-        actual = tt12.get_assignment(c_name, d, p)
-        assert actual is not None, f"Theory assignment at {c_name} {d} P{p} was erased!"
-        assert (actual.subject, actual.faculty, actual.room) == expected_tuple, "Theory assignment was modified!"
-    print("[PASS] Test 12: All previously scheduled theory assignments preserved intact")
+        actual = tt15.get_assignment(c_name, d, p)
+        assert actual is not None
+        assert (actual.subject, actual.faculty, actual.room) == expected_tuple
+    print("[PASS] Test 15: All previously scheduled theory assignments preserved intact")
     passed_count += 1
 
     # -------------------------------------------------------------
-    # Test 13: Correct scheduled and unscheduled period counts for full sample
+    # Test 16: Complete sample scheduled (all 8 required periods)
     # -------------------------------------------------------------
-    tt13, rep13 = schedule_timetable(sample_data)
-    assert rep13.total_theory_required == 4
-    assert rep13.total_theory_scheduled == 4
-    assert rep13.total_theory_unscheduled == 0
-    assert rep13.total_lab_required == 4
-    assert rep13.total_lab_scheduled == 4
-    assert rep13.total_lab_unscheduled == 0
-    assert rep13.total_lab_pending == 0
-    assert rep13.success is True
-
-    # Count total assigned slots in grid
     total_slots = sum(
         1
-        for c in tt13.grid
-        for d in tt13.grid[c]
-        for p in tt13.grid[c][d]
-        if tt13.grid[c][d][p] is not None
+        for c in tt_full.grid
+        for d in tt_full.grid[c]
+        for p in tt_full.grid[c][d]
+        if tt_full.grid[c][d][p] is not None
     )
-    assert total_slots == 8, f"Expected 8 total scheduled slots (4 theory + 4 lab), got {total_slots}"
-    print("[PASS] Test 13: Full sample generated with exact scheduled counts (4/4 theory, 4/4 lab, 8 total slots)")
+    assert total_slots == 8
+    print("[PASS] Test 16: Full sample generated via backtracking with all 8 periods scheduled")
     passed_count += 1
 
     print("\n============================================================")

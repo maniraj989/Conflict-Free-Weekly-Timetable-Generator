@@ -113,24 +113,30 @@ Implemented in [`validator.py`](validator.py), the conflict checker evaluates ca
 
 ---
 
-## 📅 Conflict-Free Scheduler (Theory & Laboratory)
+## 🔍 Backtracking Search with Forward Checking & MRV
 
-Implemented in [`scheduler.py`](scheduler.py), the scheduling engine places both theory and laboratory requirements into conflict-free slots:
+Implemented in [`search.py`](search.py) and integrated into [`scheduler.py`](scheduler.py), the scheduling engine employs a Constraint Satisfaction Problem (CSP) search engine:
 
-### 1. Theory Subject Scheduling (`schedule_theory_subjects`):
-- Iterates over each class and theory course (`is_lab=False`).
-- Searches available days, periods (1 to `periods_per_day`), and compatible theory rooms (`room_type='T'`).
-- Validates each proposed slot with `can_place_subject()`.
-
-### 2. Laboratory Subject Scheduling (`schedule_lab_subjects`):
-- **Consecutive Blocks**: Each lab requires a block of two consecutive periods on the same day in the same laboratory room (`room_type='L'`) with the same instructor.
-- **Atomic Validation**: Calls `can_place_lab_block()` before insertion. Both periods must pass validation; if either period conflicts, neither slot is assigned.
-- **Preservation of Theory Lessons**: Respects existing timetable assignments, never overwriting or displacing previously scheduled theory sessions.
-- **Accurate Accounting**: Each scheduled lab block counts as two occupied periods in the progress summary and grid metrics.
-
-### 3. Integrated Generation (`schedule_timetable`):
-- Coordinates theory placement followed by laboratory block allocation.
-- Computes comprehensive metrics: total required, successfully scheduled, and remaining unscheduled periods for both theory and labs.
+### Core Concepts:
+1. **Discrete Units of Work (`SchedulingUnit`)**:
+   - **Theory**: Represented as 1-period atomic units.
+   - **Laboratory**: Represented as 2-consecutive-period atomic blocks.
+2. **Minimum Remaining Values (MRV) Heuristic**:
+   - At each decision point, dynamically selects the unscheduled requirement with the fewest valid candidate placements.
+   - Constrained subjects (and 2-period lab blocks) are prioritized first to fail fast and drastically shrink the search tree.
+3. **Forward Checking**:
+   - After each tentative assignment, inspects all remaining unscheduled units.
+   - If any remaining unit loses all valid placement options (domain size becomes 0), the search rejects the tentative assignment and backtracks immediately without descending further.
+4. **Reversible Assignments**:
+   - Tentative placements are applied strictly using the non-mutating validators `can_place_subject` and `can_place_lab_block`.
+   - On backtrack, only the assignments belonging to the active search branch are reverted (both consecutive slots for labs are undone together).
+5. **Configurable Search Node Limits**:
+   - Guarded by a `max_nodes` parameter (default: 5000) to protect runtime against exponential combinatorial blowups.
+   - If the limit is exhausted, returns `LIMIT_REACHED` with diagnostic information rather than erroneously claiming the input is infeasible.
+6. **Explicit Search Outcomes**:
+   - `SOLVED`: An optimal, completely conflict-free timetable was found.
+   - `INFEASIBLE`: The problem was thoroughly explored and proven impossible under the given constraints.
+   - `LIMIT_REACHED`: Search terminated due to budget limits.
 
 ---
 
@@ -143,12 +149,12 @@ Implemented in [`scheduler.py`](scheduler.py), the scheduling engine places both
 
 ## 🛠️ Instructions for Running the Application
 
-1. **Run Complete Timetable Scheduler (Theory + Laboratory)**:
+1. **Run Conflict-Free Scheduler with Backtracking**:
    ```bash
    python main.py --schedule
    ```
 
-2. **Run All Unit Test Suites (10 Validator Tests + 13 Scheduler Tests)**:
+2. **Run All Unit Test Suites (10 Validator Tests + 16 Scheduler Tests)**:
    ```bash
    python main.py --test
    # or run individually:
