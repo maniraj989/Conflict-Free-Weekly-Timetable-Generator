@@ -34,7 +34,14 @@ def load_input_text() -> str:
 
 
 def main() -> None:
-    # 1. Run Unit Test Suites (--test)
+    # 1. Run Scalability Stress Test (--stress-test)
+    if any(arg in ("--stress-test", "-st") for arg in sys.argv):
+        from stress_test import run_stress_test
+
+        ok = run_stress_test()
+        sys.exit(0 if ok else 1)
+
+    # 2. Run Unit Test Suites (--test)
     if any(arg in ("--test", "-t", "--test-validator", "--test-scheduler") for arg in sys.argv):
         from validator import run_validator_tests
         from scheduler import run_scheduler_tests

@@ -193,11 +193,19 @@ def find_valid_candidates(
     """
     candidates: List[CandidatePlacement] = []
     faculty_obj = parsed_data.faculty.get(unit.faculty)
+    class_grid = timetable.grid.get(unit.class_name, {})
 
     if unit.is_lab:
         lab_rooms = [r for r in parsed_data.rooms.values() if r.room_type == "L"]
         for day in timetable.days:
+            day_slots = class_grid.get(day, {})
             for start_period in range(1, timetable.periods_per_day):
+                # Pre-check slot occupancy for the target class
+                if day_slots.get(start_period) is not None or day_slots.get(start_period + 1) is not None:
+                    continue
+                # Pre-check faculty availability
+                if faculty_obj and (not faculty_obj.is_available(day, start_period) or not faculty_obj.is_available(day, start_period + 1)):
+                    continue
                 for room in lab_rooms:
                     is_valid, _ = can_place_lab_block(
                         timetable=timetable,
@@ -215,7 +223,14 @@ def find_valid_candidates(
     else:
         theory_rooms = [r for r in parsed_data.rooms.values() if r.room_type == "T"]
         for day in timetable.days:
+            day_slots = class_grid.get(day, {})
             for period in range(1, timetable.periods_per_day + 1):
+                # Pre-check slot occupancy for the target class
+                if day_slots.get(period) is not None:
+                    continue
+                # Pre-check faculty availability
+                if faculty_obj and not faculty_obj.is_available(day, period):
+                    continue
                 for room in theory_rooms:
                     is_valid, _ = can_place_subject(
                         timetable=timetable,
@@ -414,6 +429,103 @@ def backtrack_search(
     initial_gaps: Optional[int] = None
     optimality_proven = False
 
+    theory_rooms = [r for r in parsed_data.rooms.values() if r.room_type == "T"]
+    lab_rooms = [r for r in parsed_data.rooms.values() if r.room_type == "L"]
+
+    # Fast conflict tracking sets
+    occ_class: Set[Tuple[str, str, int]] = set()
+    occ_room: Set[Tuple[str, str, int]] = set()
+    occ_faculty: Set[Tuple[str, str, int]] = set()
+    for c_name, days_d in timetable.grid.items():
+        for d_name, p_d in days_d.items():
+            for p_num, assign in p_d.items():
+                if assign is not None:
+                    occ_class.add((c_name, d_name, p_num))
+                    occ_room.add((assign.room, d_name, p_num))
+                    occ_faculty.add((assign.faculty, d_name, p_num))
+
+    def get_unit_candidates(unit: SchedulingUnit) -> List[CandidatePlacement]:
+        cands: List[CandidatePlacement] = []
+        f_obj = parsed_data.faculty.get(unit.faculty)
+        c_name = unit.class_name
+        fac = unit.faculty
+        if unit.is_lab:
+            for day in parsed_data.days:
+                for p in range(1, parsed_data.periods_per_day):
+                    p2 = p + 1
+                    if (c_name, day, p) in occ_class or (c_name, day, p2) in occ_class:
+                        continue
+                    if f_obj and (not f_obj.is_available(day, p) or not f_obj.is_available(day, p2)):
+                        continue
+                    if (fac, day, p) in occ_faculty or (fac, day, p2) in occ_faculty:
+                        continue
+                    for r in lab_rooms:
+                        if not r.is_available(day, p) or not r.is_available(day, p2):
+                            continue
+                        if (r.name, day, p) in occ_room or (r.name, day, p2) in occ_room:
+                            continue
+                        cands.append(CandidatePlacement(day=day, start_period=p, room=r))
+                        break
+        else:
+            for day in parsed_data.days:
+                for p in range(1, parsed_data.periods_per_day + 1):
+                    if (c_name, day, p) in occ_class:
+                        continue
+                    if f_obj and not f_obj.is_available(day, p):
+                        continue
+                    if (fac, day, p) in occ_faculty:
+                        continue
+                    for r in theory_rooms:
+                        if not r.is_available(day, p):
+                            continue
+                        if (r.name, day, p) in occ_room:
+                            continue
+                        cands.append(CandidatePlacement(day=day, start_period=p, room=r))
+                        break
+        return cands
+
+    def apply_step(unit: SchedulingUnit, placement: CandidatePlacement) -> None:
+        p = placement.start_period
+        timetable.assign(
+            class_name=unit.class_name,
+            day=placement.day,
+            period=p,
+            assignment=Assignment(
+                subject=unit.subject.name,
+                faculty=unit.faculty,
+                room=placement.room.name,
+            ),
+        )
+        occ_class.add((unit.class_name, placement.day, p))
+        occ_room.add((placement.room.name, placement.day, p))
+        occ_faculty.add((unit.faculty, placement.day, p))
+        if unit.is_lab:
+            timetable.assign(
+                class_name=unit.class_name,
+                day=placement.day,
+                period=p + 1,
+                assignment=Assignment(
+                    subject=unit.subject.name,
+                    faculty=unit.faculty,
+                    room=placement.room.name,
+                ),
+            )
+            occ_class.add((unit.class_name, placement.day, p + 1))
+            occ_room.add((placement.room.name, placement.day, p + 1))
+            occ_faculty.add((unit.faculty, placement.day, p + 1))
+
+    def undo_step(unit: SchedulingUnit, placement: CandidatePlacement) -> None:
+        p = placement.start_period
+        timetable.grid[unit.class_name][placement.day][p] = None
+        occ_class.remove((unit.class_name, placement.day, p))
+        occ_room.remove((placement.room.name, placement.day, p))
+        occ_faculty.remove((unit.faculty, placement.day, p))
+        if unit.is_lab:
+            timetable.grid[unit.class_name][placement.day][p + 1] = None
+            occ_class.remove((unit.class_name, placement.day, p + 1))
+            occ_room.remove((placement.room.name, placement.day, p + 1))
+            occ_faculty.remove((unit.faculty, placement.day, p + 1))
+
     def solve(remaining_units: List[SchedulingUnit]) -> bool:
         nonlocal nodes_explored, limit_reached, best_timetable, best_gaps, initial_gaps, optimality_proven
 
@@ -447,7 +559,7 @@ def backtrack_search(
         # Evaluate candidate placements for all remaining units
         unit_candidates: List[Tuple[SchedulingUnit, List[CandidatePlacement]]] = []
         for unit in remaining_units:
-            candidates = find_valid_candidates(timetable, unit, parsed_data)
+            candidates = get_unit_candidates(unit)
             if not candidates:
                 return False
             unit_candidates.append((unit, candidates))
@@ -464,21 +576,10 @@ def backtrack_search(
                 limit_reached = True
                 return False
 
-            apply_assignment(timetable, chosen_unit, placement)
-
-            # Forward checking on remaining units
-            forward_check_failed = False
-            for rem_unit in other_units:
-                rem_options = find_valid_candidates(timetable, rem_unit, parsed_data)
-                if not rem_options:
-                    forward_check_failed = True
-                    break
-
-            if not forward_check_failed:
-                if solve(other_units):
-                    return True
-
-            undo_assignment(timetable, chosen_unit, placement)
+            apply_step(chosen_unit, placement)
+            if solve(other_units):
+                return True
+            undo_step(chosen_unit, placement)
 
         return False
 

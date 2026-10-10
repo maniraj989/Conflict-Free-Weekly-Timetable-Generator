@@ -1,0 +1,214 @@
+======================================================================
+       Conflict-Free Weekly Timetable Generator - Timetable Output
+======================================================================
+Search Status:      OPTIMAL
+Idle Gaps:          0 idle gaps
+Overall Outcome:    SUCCESSFUL (Conflict-Free)
+======================================================================
+
+======================================================================
+                    GENERATED TIMETABLE GRID
+======================================================================
+
+--- Timetable for Class Group: C1 ---
+Day    |        Period 1        |        Period 2        |        Period 3        |        Period 4        |        Period 5        |        Period 6       
+-------+------------------------+------------------------+------------------------+------------------------+------------------------+-----------------------
+D1     |     LAB (F15, L2)      |     LAB (F15, L2)      |     LAB (F15, L2)      |     LAB (F15, L2)      |     TH2 (F10, R2)      |     TH2 (F10, R2)     
+D2     |     TH2 (F10, R2)      |     TH2 (F10, R2)      |     TH2 (F10, R2)      |     TH2 (F10, R2)      |     TH2 (F10, R2)      |     TH2 (F10, R2)     
+D3     |     TH2 (F10, R2)      |     TH2 (F10, R2)      |      TH1 (F1, R2)      |      TH1 (F1, R2)      |      TH1 (F1, R2)      |      TH1 (F1, R2)     
+D4     |      TH1 (F1, R2)      |      TH1 (F1, R2)      |      TH1 (F1, R2)      |      TH1 (F1, R2)      |      TH1 (F1, R2)      |      TH1 (F1, R2)     
+D5     |     TH3 (F11, R2)      |     TH3 (F11, R2)      |     TH3 (F11, R2)      |     TH3 (F11, R2)      |     TH3 (F11, R2)      |     TH3 (F11, R2)     
+
+--- Timetable for Class Group: C2 ---
+Day    |        Period 1        |        Period 2        |        Period 3        |        Period 4        |        Period 5        |        Period 6       
+-------+------------------------+------------------------+------------------------+------------------------+------------------------+-----------------------
+D1     |      TH1 (F1, R1)      |      TH1 (F1, R1)      |      TH1 (F1, R1)      |      TH1 (F1, R1)      |     LAB (F15, L2)      |     LAB (F15, L2)     
+D2     |     LAB (F15, L2)      |     LAB (F15, L2)      |      TH1 (F1, R3)      |      TH1 (F1, R3)      |      TH1 (F1, R3)      |      TH1 (F1, R3)     
+D3     |      TH1 (F1, R3)      |      TH1 (F1, R3)      |      TH2 (F6, R3)      |      TH2 (F6, R3)      |      TH2 (F6, R3)      |      TH2 (F6, R3)     
+D4     |      TH2 (F6, R3)      |      TH2 (F6, R3)      |      TH2 (F6, R3)      |      TH2 (F6, R3)      |      TH2 (F6, R3)      |      TH2 (F6, R3)     
+D5     |     TH3 (F12, R3)      |     TH3 (F12, R3)      |     TH3 (F12, R3)      |     TH3 (F12, R3)      |     TH3 (F12, R3)      |     TH3 (F12, R3)     
+
+--- Timetable for Class Group: C3 ---
+Day    |        Period 1        |        Period 2        |        Period 3        |        Period 4        |        Period 5        |        Period 6       
+-------+------------------------+------------------------+------------------------+------------------------+------------------------+-----------------------
+D1     |     LAB (F16, L3)      |     LAB (F16, L3)      |     LAB (F16, L3)      |     LAB (F16, L3)      |      TH2 (F6, R3)      |      TH2 (F6, R3)     
+D2     |      TH2 (F6, R3)      |      TH2 (F6, R3)      |      TH2 (F6, R4)      |      TH2 (F6, R4)      |      TH2 (F6, R4)      |      TH2 (F6, R4)     
+D3     |      TH2 (F6, R4)      |      TH2 (F6, R4)      |      TH1 (F2, R4)      |      TH1 (F2, R4)      |      TH1 (F2, R4)      |      TH1 (F2, R4)     
+D4     |      TH1 (F2, R4)      |      TH1 (F2, R4)      |      TH1 (F2, R4)      |      TH1 (F2, R4)      |      TH1 (F2, R4)      |      TH1 (F2, R4)     
+D5     |     TH3 (F13, R4)      |     TH3 (F13, R4)      |     TH3 (F13, R4)      |     TH3 (F13, R4)      |     TH3 (F13, R4)      |     TH3 (F13, R4)     
+
+--- Timetable for Class Group: C4 ---
+Day    |        Period 1        |        Period 2        |        Period 3        |        Period 4        |        Period 5        |        Period 6       
+-------+------------------------+------------------------+------------------------+------------------------+------------------------+-----------------------
+D1     |      TH1 (F2, R2)      |      TH1 (F2, R2)      |      TH1 (F2, R2)      |      TH1 (F2, R2)      |     LAB (F16, L3)      |     LAB (F16, L3)     
+D2     |     LAB (F16, L3)      |     LAB (F16, L3)      |      TH1 (F2, R5)      |      TH1 (F2, R5)      |      TH1 (F2, R5)      |      TH1 (F2, R5)     
+D3     |      TH1 (F2, R5)      |      TH1 (F2, R5)      |     TH3 (F11, R5)      |     TH3 (F11, R5)      |     TH3 (F11, R5)      |     TH3 (F11, R5)     
+D4     |     TH3 (F11, R5)      |     TH3 (F11, R5)      |      TH2 (F7, R5)      |      TH2 (F7, R5)      |      TH2 (F7, R5)      |      TH2 (F7, R5)     
+D5     |      TH2 (F7, R5)      |      TH2 (F7, R5)      |      TH2 (F7, R5)      |      TH2 (F7, R5)      |      TH2 (F7, R5)      |      TH2 (F7, R5)     
+
+--- Timetable for Class Group: C5 ---
+Day    |        Period 1        |        Period 2        |        Period 3        |        Period 4        |        Period 5        |        Period 6       
+-------+------------------------+------------------------+------------------------+------------------------+------------------------+-----------------------
+D1     |     LAB (F17, L4)      |     LAB (F17, L4)      |     LAB (F17, L4)      |     LAB (F17, L4)      |      TH2 (F7, R5)      |      TH2 (F7, R5)     
+D2     |      TH2 (F7, R4)      |      TH2 (F7, R4)      |      TH2 (F7, R6)      |      TH2 (F7, R6)      |      TH2 (F7, R6)      |      TH2 (F7, R6)     
+D3     |      TH2 (F7, R6)      |      TH2 (F7, R6)      |     TH3 (F12, R6)      |     TH3 (F12, R6)      |     TH3 (F12, R6)      |     TH3 (F12, R6)     
+D4     |     TH3 (F12, R6)      |     TH3 (F12, R6)      |      TH1 (F3, R6)      |      TH1 (F3, R6)      |      TH1 (F3, R6)      |      TH1 (F3, R6)     
+D5     |      TH1 (F3, R6)      |      TH1 (F3, R6)      |      TH1 (F3, R6)      |      TH1 (F3, R6)      |      TH1 (F3, R6)      |      TH1 (F3, R6)     
+
+--- Timetable for Class Group: C6 ---
+Day    |        Period 1        |        Period 2        |        Period 3        |        Period 4        |        Period 5        |        Period 6       
+-------+------------------------+------------------------+------------------------+------------------------+------------------------+-----------------------
+D1     |      TH1 (F3, R4)      |      TH1 (F3, R4)      |      TH1 (F3, R4)      |      TH1 (F3, R4)      |     LAB (F17, L4)      |     LAB (F17, L4)     
+D2     |     LAB (F17, L4)      |     LAB (F17, L4)      |      TH1 (F3, R7)      |      TH1 (F3, R7)      |      TH1 (F3, R7)      |      TH1 (F3, R7)     
+D3     |      TH1 (F3, R7)      |      TH1 (F3, R7)      |     TH3 (F13, R7)      |     TH3 (F13, R7)      |     TH3 (F13, R7)      |     TH3 (F13, R7)     
+D4     |     TH3 (F13, R7)      |     TH3 (F13, R7)      |      TH2 (F8, R7)      |      TH2 (F8, R7)      |      TH2 (F8, R7)      |      TH2 (F8, R7)     
+D5     |      TH2 (F8, R7)      |      TH2 (F8, R7)      |      TH2 (F8, R7)      |      TH2 (F8, R7)      |      TH2 (F8, R7)      |      TH2 (F8, R7)     
+
+--- Timetable for Class Group: C7 ---
+Day    |        Period 1        |        Period 2        |        Period 3        |        Period 4        |        Period 5        |        Period 6       
+-------+------------------------+------------------------+------------------------+------------------------+------------------------+-----------------------
+D1     |     TH3 (F11, R3)      |     TH3 (F11, R3)      |     TH3 (F11, R3)      |     TH3 (F11, R3)      |     TH3 (F11, R4)      |     TH3 (F11, R4)     
+D2     |      TH2 (F8, R5)      |      TH2 (F8, R5)      |     LAB (F18, L1)      |     LAB (F18, L1)      |     LAB (F18, L1)      |     LAB (F18, L1)     
+D3     |      TH2 (F8, R8)      |      TH2 (F8, R8)      |      TH2 (F8, R8)      |      TH2 (F8, R8)      |      TH2 (F8, R8)      |      TH2 (F8, R8)     
+D4     |      TH2 (F8, R8)      |      TH2 (F8, R8)      |      TH1 (F4, R8)      |      TH1 (F4, R8)      |      TH1 (F4, R8)      |      TH1 (F4, R8)     
+D5     |      TH1 (F4, R8)      |      TH1 (F4, R8)      |      TH1 (F4, R8)      |      TH1 (F4, R8)      |      TH1 (F4, R8)      |      TH1 (F4, R8)     
+
+--- Timetable for Class Group: C8 ---
+Day    |        Period 1        |        Period 2        |        Period 3        |        Period 4        |        Period 5        |        Period 6       
+-------+------------------------+------------------------+------------------------+------------------------+------------------------+-----------------------
+D1     |      TH1 (F4, R6)      |      TH1 (F4, R6)      |      TH1 (F4, R6)      |      TH1 (F4, R6)      |      TH1 (F4, R6)      |      TH1 (F4, R6)     
+D2     |      TH1 (F4, R6)      |      TH1 (F4, R6)      |      TH1 (F4, R9)      |      TH1 (F4, R9)      |     TH3 (F12, R8)      |     TH3 (F12, R8)     
+D3     |     LAB (F18, L1)      |     LAB (F18, L1)      |     LAB (F18, L1)      |     LAB (F18, L1)      |      TH2 (F9, R9)      |      TH2 (F9, R9)     
+D4     |      TH2 (F9, R9)      |      TH2 (F9, R9)      |     TH3 (F12, R9)      |     TH3 (F12, R9)      |     TH3 (F12, R9)      |     TH3 (F12, R9)     
+D5     |      TH2 (F9, R9)      |      TH2 (F9, R9)      |      TH2 (F9, R9)      |      TH2 (F9, R9)      |      TH2 (F9, R9)      |      TH2 (F9, R9)     
+
+--- Timetable for Class Group: C9 ---
+Day    |        Period 1        |        Period 2        |        Period 3        |        Period 4        |        Period 5        |        Period 6       
+-------+------------------------+------------------------+------------------------+------------------------+------------------------+-----------------------
+D1     |     TH3 (F13, R5)      |     TH3 (F13, R5)      |     TH3 (F13, R5)      |     TH3 (F13, R5)      |     LAB (F19, L1)      |     LAB (F19, L1)     
+D2     |     LAB (F19, L1)      |     LAB (F19, L1)      |     TH3 (F13, R8)      |     TH3 (F13, R8)      |      TH2 (F9, R9)      |      TH2 (F9, R9)     
+D3     |      TH2 (F9, R9)      |      TH2 (F9, R9)      |      TH2 (F9, R9)      |      TH2 (F9, R9)      |     TH1 (F5, R10)      |     TH1 (F5, R10)     
+D4     |     TH1 (F5, R10)      |     TH1 (F5, R10)      |     TH2 (F9, R10)      |     TH2 (F9, R10)      |     TH2 (F9, R10)      |     TH2 (F9, R10)     
+D5     |     TH1 (F5, R10)      |     TH1 (F5, R10)      |     TH1 (F5, R10)      |     TH1 (F5, R10)      |     TH1 (F5, R10)      |     TH1 (F5, R10)     
+
+--- Timetable for Class Group: C10 ---
+Day    |        Period 1        |        Period 2        |        Period 3        |        Period 4        |        Period 5        |        Period 6       
+-------+------------------------+------------------------+------------------------+------------------------+------------------------+-----------------------
+D1     |     LAB (F19, L1)      |     LAB (F19, L1)      |     LAB (F19, L1)      |     LAB (F19, L1)      |      TH1 (F5, R1)      |      TH1 (F5, R1)     
+D2     |      TH1 (F5, R1)      |      TH1 (F5, R1)      |      TH1 (F5, R1)      |      TH1 (F5, R1)      |      TH1 (F5, R1)      |      TH1 (F5, R1)     
+D3     |      TH1 (F5, R1)      |      TH1 (F5, R1)      |     TH2 (F10, R1)      |     TH2 (F10, R1)      |     TH2 (F10, R1)      |     TH2 (F10, R1)     
+D4     |     TH2 (F10, R1)      |     TH2 (F10, R1)      |     TH2 (F10, R1)      |     TH2 (F10, R1)      |     TH2 (F10, R1)      |     TH2 (F10, R1)     
+D5     |     TH3 (F14, R1)      |     TH3 (F14, R1)      |     TH3 (F14, R1)      |     TH3 (F14, R1)      |     TH3 (F14, R1)      |     TH3 (F14, R1)
+
+======================================================================
+                 SCHEDULING SUMMARY REPORT
+======================================================================
+
+1. Search & Optimization Outcome:
+   - Search Status:     OPTIMAL
+   - Initial Solution:  0 gaps
+   - Optimized Gaps:    0 idle gaps
+   - Optimality Status: PROVEN (Global Minimum)
+   - Diagnostics:       Optimal conflict-free timetable found with 0 idle gaps. (Explored 280 search nodes)
+
+2. Theory Subjects:
+   - Total Required:    260 periods
+   - Total Scheduled:   260 periods
+   - Total Unscheduled: 0 periods
+
+3. Laboratory Subjects:
+   - Total Required:    40 periods
+   - Total Scheduled:   40 periods
+   - Total Unscheduled: 0 periods
+
+4. Overall Timetable Summary:
+   - Total Required:    300 periods
+   - Total Scheduled:   300 periods
+   - Total Unscheduled: 0 periods
+   - Final Status:      COMPLETE (Conflict-Free)
+
+5. Detailed Breakdown by Subject:
+   - [C1] TH1   (Theory) | Faculty: F1  | 10/10 placed [COMPLETED]
+     Note: All required periods successfully scheduled
+   - [C1] TH2   (Theory) | Faculty: F10 | 10/10 placed [COMPLETED]
+     Note: All required periods successfully scheduled
+   - [C1] TH3   (Theory) | Faculty: F11 | 6/6 placed [COMPLETED]
+     Note: All required periods successfully scheduled
+   - [C1] LAB   (Lab   ) | Faculty: F15 | 4/4 placed [COMPLETED]
+     Note: All required periods successfully scheduled
+   - [C2] TH1   (Theory) | Faculty: F1  | 10/10 placed [COMPLETED]
+     Note: All required periods successfully scheduled
+   - [C2] TH2   (Theory) | Faculty: F6  | 10/10 placed [COMPLETED]
+     Note: All required periods successfully scheduled
+   - [C2] TH3   (Theory) | Faculty: F12 | 6/6 placed [COMPLETED]
+     Note: All required periods successfully scheduled
+   - [C2] LAB   (Lab   ) | Faculty: F15 | 4/4 placed [COMPLETED]
+     Note: All required periods successfully scheduled
+   - [C3] TH1   (Theory) | Faculty: F2  | 10/10 placed [COMPLETED]
+     Note: All required periods successfully scheduled
+   - [C3] TH2   (Theory) | Faculty: F6  | 10/10 placed [COMPLETED]
+     Note: All required periods successfully scheduled
+   - [C3] TH3   (Theory) | Faculty: F13 | 6/6 placed [COMPLETED]
+     Note: All required periods successfully scheduled
+   - [C3] LAB   (Lab   ) | Faculty: F16 | 4/4 placed [COMPLETED]
+     Note: All required periods successfully scheduled
+   - [C4] TH1   (Theory) | Faculty: F2  | 10/10 placed [COMPLETED]
+     Note: All required periods successfully scheduled
+   - [C4] TH2   (Theory) | Faculty: F7  | 10/10 placed [COMPLETED]
+     Note: All required periods successfully scheduled
+   - [C4] TH3   (Theory) | Faculty: F11 | 6/6 placed [COMPLETED]
+     Note: All required periods successfully scheduled
+   - [C4] LAB   (Lab   ) | Faculty: F16 | 4/4 placed [COMPLETED]
+     Note: All required periods successfully scheduled
+   - [C5] TH1   (Theory) | Faculty: F3  | 10/10 placed [COMPLETED]
+     Note: All required periods successfully scheduled
+   - [C5] TH2   (Theory) | Faculty: F7  | 10/10 placed [COMPLETED]
+     Note: All required periods successfully scheduled
+   - [C5] TH3   (Theory) | Faculty: F12 | 6/6 placed [COMPLETED]
+     Note: All required periods successfully scheduled
+   - [C5] LAB   (Lab   ) | Faculty: F17 | 4/4 placed [COMPLETED]
+     Note: All required periods successfully scheduled
+   - [C6] TH1   (Theory) | Faculty: F3  | 10/10 placed [COMPLETED]
+     Note: All required periods successfully scheduled
+   - [C6] TH2   (Theory) | Faculty: F8  | 10/10 placed [COMPLETED]
+     Note: All required periods successfully scheduled
+   - [C6] TH3   (Theory) | Faculty: F13 | 6/6 placed [COMPLETED]
+     Note: All required periods successfully scheduled
+   - [C6] LAB   (Lab   ) | Faculty: F17 | 4/4 placed [COMPLETED]
+     Note: All required periods successfully scheduled
+   - [C7] TH1   (Theory) | Faculty: F4  | 10/10 placed [COMPLETED]
+     Note: All required periods successfully scheduled
+   - [C7] TH2   (Theory) | Faculty: F8  | 10/10 placed [COMPLETED]
+     Note: All required periods successfully scheduled
+   - [C7] TH3   (Theory) | Faculty: F11 | 6/6 placed [COMPLETED]
+     Note: All required periods successfully scheduled
+   - [C7] LAB   (Lab   ) | Faculty: F18 | 4/4 placed [COMPLETED]
+     Note: All required periods successfully scheduled
+   - [C8] TH1   (Theory) | Faculty: F4  | 10/10 placed [COMPLETED]
+     Note: All required periods successfully scheduled
+   - [C8] TH2   (Theory) | Faculty: F9  | 10/10 placed [COMPLETED]
+     Note: All required periods successfully scheduled
+   - [C8] TH3   (Theory) | Faculty: F12 | 6/6 placed [COMPLETED]
+     Note: All required periods successfully scheduled
+   - [C8] LAB   (Lab   ) | Faculty: F18 | 4/4 placed [COMPLETED]
+     Note: All required periods successfully scheduled
+   - [C9] TH1   (Theory) | Faculty: F5  | 10/10 placed [COMPLETED]
+     Note: All required periods successfully scheduled
+   - [C9] TH2   (Theory) | Faculty: F9  | 10/10 placed [COMPLETED]
+     Note: All required periods successfully scheduled
+   - [C9] TH3   (Theory) | Faculty: F13 | 6/6 placed [COMPLETED]
+     Note: All required periods successfully scheduled
+   - [C9] LAB   (Lab   ) | Faculty: F19 | 4/4 placed [COMPLETED]
+     Note: All required periods successfully scheduled
+   - [C10] TH1   (Theory) | Faculty: F5  | 10/10 placed [COMPLETED]
+     Note: All required periods successfully scheduled
+   - [C10] TH2   (Theory) | Faculty: F10 | 10/10 placed [COMPLETED]
+     Note: All required periods successfully scheduled
+   - [C10] TH3   (Theory) | Faculty: F14 | 6/6 placed [COMPLETED]
+     Note: All required periods successfully scheduled
+   - [C10] LAB   (Lab   ) | Faculty: F19 | 4/4 placed [COMPLETED]
+     Note: All required periods successfully scheduled
+
+======================================================================
+                         END OF REPORT
+======================================================================
