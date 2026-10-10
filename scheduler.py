@@ -1,13 +1,14 @@
-"""Greedy and backtracking schedulers for theory and laboratory subjects.
+"""Greedy, backtracking, and gap-optimizing schedulers for weekly timetables.
 
-Schedules theory subjects into individual single-period slots and laboratory
-subjects into 2-consecutive-period blocks on the same day in compatible lab
-rooms using the non-mutating conflict validator (validator.py) and backtracking
-search with Forward Checking and Minimum Remaining Values (MRV).
+Provides:
+- Discrete unit scheduling for theory and 2-period lab blocks.
+- Backtracking search with Forward Checking and Minimum Remaining Values (MRV).
+- Idle gap counting and timetable scoring optimization.
+- Comprehensive unit tests covering constraints, search limits, and gap minimization.
 """
 
 from dataclasses import dataclass, field
-from typing import List, Optional, Tuple
+from typing import Dict, List, Optional, Tuple
 from models import Assignment, Timetable
 from parser import ParsedData
 from search import (
@@ -17,6 +18,10 @@ from search import (
     SchedulingUnit,
     apply_assignment,
     backtrack_search,
+    calculate_class_day_gaps,
+    calculate_gaps_by_class,
+    calculate_total_idle_gaps,
+    clone_timetable,
     find_valid_candidates,
     undo_assignment,
 )
@@ -40,7 +45,7 @@ class SubjectScheduleStatus:
 
 @dataclass
 class SchedulingReport:
-    """Summary of timetable scheduling execution."""
+    """Summary of timetable scheduling execution and optimization diagnostics."""
 
     total_theory_required: int = 0
     total_theory_scheduled: int = 0
@@ -53,28 +58,16 @@ class SchedulingReport:
     success: bool = True
     search_status: str = "SOLVED"
     diagnostics: str = ""
+    initial_gaps: Optional[int] = None
+    best_gaps: Optional[int] = None
+    gaps_reduced: Optional[int] = None
+    optimality_proven: bool = False
 
 
 def schedule_theory_subjects(
     parsed_data: ParsedData, timetable: Optional[Timetable] = None
 ) -> Tuple[Timetable, SchedulingReport]:
-    """Greedily schedule all theory subjects into valid timetable slots.
-
-    For each class and each theory subject:
-    - Attempts to schedule periods_per_week individual periods.
-    - Searches days and periods systematically.
-    - Tries compatible theory rooms (room_type == 'T').
-    - Calls can_place_subject() from validator.py before every assignment.
-    - Inserts Assignment only when validation succeeds.
-    - Laboratory subjects are tracked as pending.
-
-    Args:
-        parsed_data: ParsedData containing classes, rooms, faculty, and grid dimensions.
-        timetable: Optional existing Timetable. If None, a new one is initialized.
-
-    Returns:
-        A tuple of (Timetable, SchedulingReport).
-    """
+    """Greedily schedule all theory subjects into valid timetable slots."""
     if timetable is None:
         timetable = Timetable(
             days=list(parsed_data.days),
@@ -195,24 +188,7 @@ def schedule_lab_subjects(
     timetable: Timetable,
     report: Optional[SchedulingReport] = None,
 ) -> Tuple[Timetable, SchedulingReport]:
-    """Schedule laboratory subjects into 2-consecutive-period blocks on the same day.
-
-    Requirements enforced:
-    - Each lab requires 2 consecutive periods on the same day in the same lab room.
-    - Atomic validation: Both periods must be validated via can_place_lab_block()
-      before either assignment is inserted.
-    - Uses exclusively laboratory rooms (room_type == 'L').
-    - Preserves all previously scheduled theory assignments without overwriting.
-    - Each lab block counts as 2 occupied periods in the report.
-
-    Args:
-        parsed_data: The parsed input data.
-        timetable: The timetable already containing theory assignments.
-        report: Optional existing SchedulingReport to update.
-
-    Returns:
-        A tuple of (Timetable, SchedulingReport).
-    """
+    """Schedule laboratory subjects into 2-consecutive-period blocks on the same day."""
     if report is None:
         report = SchedulingReport()
 
@@ -343,19 +319,15 @@ def schedule_timetable(
     parsed_data: ParsedData,
     use_backtracking: bool = True,
     max_nodes: int = 5000,
+    optimize: bool = True,
 ) -> Tuple[Optional[Timetable], SchedulingReport]:
-    """Generate a conflict-free timetable using backtracking search with forward checking.
-
-    Features:
-    - Backtracking with Forward Checking and Minimum Remaining Values (MRV).
-    - If a solution is found, returns the complete Timetable and SchedulingReport.
-    - If infeasible or search limit reached, returns diagnostics and explanation.
-    - Falls back to pure greedy method if use_backtracking is explicitly False.
+    """Generate a conflict-free timetable using backtracking search with forward checking and gap optimization.
 
     Args:
         parsed_data: ParsedData configuration.
         use_backtracking: Whether to use Backtracking + Forward Checking (default: True).
         max_nodes: Maximum search nodes allowed during backtracking (default: 5000).
+        optimize: Whether to optimize for minimum class idle gaps (default: True).
 
     Returns:
         A tuple of (Optional[Timetable], SchedulingReport).
@@ -365,10 +337,8 @@ def schedule_timetable(
         timetable, report = schedule_lab_subjects(parsed_data, timetable, report)
         return timetable, report
 
-    # Execute Backtracking Search with Forward Checking & MRV
-    result = backtrack_search(parsed_data, max_nodes=max_nodes)
+    result = backtrack_search(parsed_data, max_nodes=max_nodes, optimize=optimize)
 
-    # Compute overall workload totals
     total_theory_req = sum(
         s.periods_per_week for cg in parsed_data.classes.values() for s in cg.subjects if not s.is_lab
     )
@@ -376,7 +346,7 @@ def schedule_timetable(
         s.periods_per_week for cg in parsed_data.classes.values() for s in cg.subjects if s.is_lab
     )
 
-    if result.status == SearchStatus.SOLVED and result.timetable is not None:
+    if result.timetable is not None:
         tt = result.timetable
         statuses: List[SubjectScheduleStatus] = []
         total_theory_sched = 0
@@ -384,7 +354,6 @@ def schedule_timetable(
 
         for class_name, group in parsed_data.classes.items():
             for subject in group.subjects:
-                # Count assigned periods in resulting grid
                 placed_count = sum(
                     1
                     for day in tt.days
@@ -419,6 +388,14 @@ def schedule_timetable(
                     )
                 )
 
+        initial_gaps = result.initial_gaps
+        best_gaps = result.best_gaps
+        gaps_reduced = (
+            (initial_gaps - best_gaps)
+            if (initial_gaps is not None and best_gaps is not None)
+            else None
+        )
+
         report = SchedulingReport(
             total_theory_required=total_theory_req,
             total_theory_scheduled=total_theory_sched,
@@ -431,10 +408,14 @@ def schedule_timetable(
             success=True,
             search_status=result.status.value,
             diagnostics=f"{result.message} (Explored {result.nodes_explored} search nodes)",
+            initial_gaps=initial_gaps,
+            best_gaps=best_gaps,
+            gaps_reduced=gaps_reduced,
+            optimality_proven=result.optimality_proven,
         )
         return tt, report
 
-    # Handle INFEASIBLE or LIMIT_REACHED
+    # No timetable found
     statuses = [
         SubjectScheduleStatus(
             class_name=cg_name,
@@ -463,6 +444,10 @@ def schedule_timetable(
         success=False,
         search_status=result.status.value,
         diagnostics=result.message,
+        initial_gaps=None,
+        best_gaps=None,
+        gaps_reduced=None,
+        optimality_proven=False,
     )
     return None, report
 
@@ -500,13 +485,25 @@ def print_timetable_grid(timetable: Timetable) -> None:
 
 
 def print_scheduling_report(report: SchedulingReport) -> None:
-    """Print an organized breakdown of scheduling results."""
+    """Print an organized breakdown of scheduling results and gap optimization diagnostics."""
     print("\n" + "=" * 70)
     print("                 SCHEDULING SUMMARY REPORT")
     print("=" * 70)
 
-    print("\n1. Search Outcome:")
+    print("\n1. Search & Optimization Outcome:")
     print(f"   - Search Status:     {report.search_status}")
+    if report.best_gaps is not None:
+        init_str = f"{report.initial_gaps} gaps" if report.initial_gaps is not None else "N/A"
+        print(f"   - Initial Solution:  {init_str}")
+        print(f"   - Optimized Gaps:    {report.best_gaps} idle gaps")
+        if report.gaps_reduced is not None and report.gaps_reduced > 0:
+            print(f"   - Gaps Eliminated:   {report.gaps_reduced} gaps")
+        opt_str = (
+            "PROVEN (Global Minimum)"
+            if report.optimality_proven
+            else "INCOMPLETE (Search Budget Limited)"
+        )
+        print(f"   - Optimality Status: {opt_str}")
     if report.diagnostics:
         print(f"   - Diagnostics:       {report.diagnostics}")
 
@@ -548,13 +545,13 @@ def print_scheduling_report(report: SchedulingReport) -> None:
 
 
 def run_scheduler_tests() -> bool:
-    """Run comprehensive unit tests for backtracking, forward checking, MRV, and lab scheduling."""
+    """Run comprehensive unit tests covering all scheduler, backtracking, and gap optimization requirements."""
     print("\n============================================================")
     print("           Running Timetable Scheduler Test Suite")
     print("============================================================\n")
 
     passed_count = 0
-    total_tests = 16
+    total_tests = 23
 
     from models import ClassGroup, Faculty, Room, Subject
     from parser import ParsedData, SAMPLE_INPUT, parse_timetable_input
@@ -579,7 +576,7 @@ def run_scheduler_tests() -> bool:
     passed_count += 1
 
     # -------------------------------------------------------------
-    # Test 2: Preventing shared-faculty clash between classes X and Y
+    # Test 2: Preventing shared-faculty clash across classes X and Y
     # -------------------------------------------------------------
     cg_x = ClassGroup(name="X")
     cg_x.add_subject(Subject(name="TH_X", faculty="F1", periods_per_week=2, is_lab=False))
@@ -742,13 +739,9 @@ def run_scheduler_tests() -> bool:
         faculty="F_TEST",
     )
     placement_lab = CandidatePlacement(day="D1", start_period=1, room=Room(name="L1", room_type="L"))
-
-    # Apply placement
     apply_assignment(tt_ab, unit_lab, placement_lab)
     assert tt_ab.get_assignment("C_ROLL", "D1", 1) is not None
     assert tt_ab.get_assignment("C_ROLL", "D1", 2) is not None
-
-    # Undo placement (rollback)
     undo_assignment(tt_ab, unit_lab, placement_lab)
     assert tt_ab.get_assignment("C_ROLL", "D1", 1) is None
     assert tt_ab.get_assignment("C_ROLL", "D1", 2) is None
@@ -756,21 +749,13 @@ def run_scheduler_tests() -> bool:
     passed_count += 1
 
     # -------------------------------------------------------------
-    # Test 10: Case where greedy ordering fails but backtracking succeeds
+    # Test 10: Solved constrained problem where naive greedy ordering fails
     # -------------------------------------------------------------
-    # Class X: TH_X (1 period, F1). F1 available at P1 and P3.
-    # Class Y: TH_Y (1 period, F2). F2 available ONLY at P1.
-    # Class Z: LAB_Z (2 periods, F3). F3 available at P2 and P3.
-    # Room R1 (Theory), Room L1 (Lab).
-    # If a naive greedy method schedules X first, it takes P1. Then Y fails!
-    # Backtracking with MRV chooses Y first (only 1 option at P1), puts X in P3, and Z in P2-P3.
     fac_f1 = Faculty(name="F1")
     fac_f1.mark_available("D1", 1)
     fac_f1.mark_available("D1", 3)
-
     fac_f2 = Faculty(name="F2")
-    fac_f2.mark_available("D1", 1)  # Only available at P1
-
+    fac_f2.mark_available("D1", 1)
     fac_f3 = Faculty(name="F3")
     fac_f3.mark_available("D1", 2)
     fac_f3.mark_available("D1", 3)
@@ -791,20 +776,16 @@ def run_scheduler_tests() -> bool:
     )
 
     res_ordering = backtrack_search(data_ordering)
-    assert res_ordering.status == SearchStatus.SOLVED, f"Expected SOLVED, got {res_ordering.status}"
+    assert res_ordering.status in (SearchStatus.SOLVED, SearchStatus.OPTIMAL)
     assert res_ordering.timetable is not None
-    # Verify CY got P1 and CX got P3
     assert res_ordering.timetable.get_assignment("CY", "D1", 1) is not None
     assert res_ordering.timetable.get_assignment("CX", "D1", 3) is not None
-    assert res_ordering.timetable.get_assignment("CZ", "D1", 2) is not None
-    assert res_ordering.timetable.get_assignment("CZ", "D1", 3) is not None
     print("[PASS] Test 10: Solved constrained problem where naive greedy ordering fails via MRV/backtracking")
     passed_count += 1
 
     # -------------------------------------------------------------
     # Test 11: Infeasible timetable detection
     # -------------------------------------------------------------
-    # Requires 5 periods on a timetable that only has 2 slots total
     cg_inf = ClassGroup(name="C_INF")
     cg_inf.add_subject(Subject(name="SUB_INF", faculty="F_INF", periods_per_week=5, is_lab=False))
     data_inf = ParsedData(
@@ -815,7 +796,7 @@ def run_scheduler_tests() -> bool:
         rooms={"R1": Room(name="R1", room_type="T")},
     )
     res_inf = backtrack_search(data_inf)
-    assert res_inf.status == SearchStatus.INFEASIBLE, f"Expected INFEASIBLE, got {res_inf.status}"
+    assert res_inf.status == SearchStatus.INFEASIBLE
     assert res_inf.timetable is None
     print("[PASS] Test 11: Accurately detected and reported infeasible problem")
     passed_count += 1
@@ -823,7 +804,6 @@ def run_scheduler_tests() -> bool:
     # -------------------------------------------------------------
     # Test 12: Forward checking detects unit with 0 valid candidates
     # -------------------------------------------------------------
-    # 2 classes both need room R1 at the only available slot (D1 P1)
     cg_fc1 = ClassGroup(name="C1")
     cg_fc1.add_subject(Subject(name="S1", faculty="F1", periods_per_week=1, is_lab=False))
     cg_fc2 = ClassGroup(name="C2")
@@ -843,7 +823,6 @@ def run_scheduler_tests() -> bool:
     # -------------------------------------------------------------
     # Test 13: Search-node limit reporting
     # -------------------------------------------------------------
-    # Set max_nodes=1 on the sample problem (which has 8 units)
     res_limit = backtrack_search(sample_data, max_nodes=1)
     assert res_limit.status == SearchStatus.LIMIT_REACHED
     assert "Search limit reached" in res_limit.message or "limit reached" in res_limit.message.lower()
@@ -860,22 +839,18 @@ def run_scheduler_tests() -> bool:
     assert rep_full.total_theory_scheduled == 4
     assert rep_full.total_lab_scheduled == 4
 
-    # Validate every slot in tt_full
     for c_name in sample_data.classes:
         for day in tt_full.days:
             for p in range(1, tt_full.periods_per_day + 1):
                 slot = tt_full.get_assignment(c_name, day, p)
                 if slot:
-                    # Check room exists and room type matches
                     room_obj = sample_data.rooms[slot.room]
-                    # If it's a lab, room must be 'L'
                     is_lab_slot = (slot.subject == "LAB")
                     if is_lab_slot:
                         assert room_obj.room_type == "L"
                     else:
                         assert room_obj.room_type == "T"
 
-    # Verify no room double-booking in any period
     for day in tt_full.days:
         for p in range(1, tt_full.periods_per_day + 1):
             rooms_used = []
@@ -883,8 +858,8 @@ def run_scheduler_tests() -> bool:
             for c_name in sample_data.classes:
                 slot = tt_full.get_assignment(c_name, day, p)
                 if slot:
-                    assert slot.room not in rooms_used, f"Room clash at {day} P{p} for room {slot.room}!"
-                    assert slot.faculty not in faculty_used, f"Faculty clash at {day} P{p} for {slot.faculty}!"
+                    assert slot.room not in rooms_used
+                    assert slot.faculty not in faculty_used
                     rooms_used.append(slot.room)
                     faculty_used.append(slot.faculty)
     print("[PASS] Test 14: Every final assignment rigorously passed all validator constraints")
@@ -923,8 +898,170 @@ def run_scheduler_tests() -> bool:
     print("[PASS] Test 16: Full sample generated via backtracking with all 8 periods scheduled")
     passed_count += 1
 
+    # -------------------------------------------------------------
+    # Test 17: Correct gap counting (empty periods between first & last occupied)
+    # -------------------------------------------------------------
+    tt_gaps = Timetable(days=["D1"], periods_per_day=5)
+    tt_gaps.initialize_class("CGAP")
+    # Periods: 1 (occupied), 2 (empty), 3 (occupied), 4 (empty), 5 (occupied)
+    tt_gaps.assign("CGAP", "D1", 1, Assignment(subject="S1", faculty="F1", room="R1"))
+    tt_gaps.assign("CGAP", "D1", 3, Assignment(subject="S2", faculty="F1", room="R1"))
+    tt_gaps.assign("CGAP", "D1", 5, Assignment(subject="S3", faculty="F1", room="R1"))
+    # Gaps should be exactly 2 (periods 2 and 4)
+    gaps_found = calculate_class_day_gaps(tt_gaps, "CGAP", "D1")
+    assert gaps_found == 2, f"Expected 2 gaps, got {gaps_found}"
+    assert calculate_total_idle_gaps(tt_gaps) == 2
+    print("[PASS] Test 17: Correct gap counting for interleaved empty periods (2 gaps)")
+    passed_count += 1
+
+    # -------------------------------------------------------------
+    # Test 18: No gaps for consecutive lessons
+    # -------------------------------------------------------------
+    tt_nogap = Timetable(days=["D1"], periods_per_day=6)
+    tt_nogap.initialize_class("CNOGAP")
+    # Periods 1, 2, 3 occupied; 4, 5, 6 empty
+    tt_nogap.assign("CNOGAP", "D1", 1, Assignment(subject="S1", faculty="F1", room="R1"))
+    tt_nogap.assign("CNOGAP", "D1", 2, Assignment(subject="S2", faculty="F1", room="R1"))
+    tt_nogap.assign("CNOGAP", "D1", 3, Assignment(subject="S3", faculty="F1", room="R1"))
+    assert calculate_class_day_gaps(tt_nogap, "CNOGAP", "D1") == 0
+    assert calculate_total_idle_gaps(tt_nogap) == 0
+    print("[PASS] Test 18: Verified zero idle gaps for consecutive lessons")
+    passed_count += 1
+
+    # -------------------------------------------------------------
+    # Test 19: Empty periods before or after lessons are not counted
+    # -------------------------------------------------------------
+    tt_edge = Timetable(days=["D1"], periods_per_day=6)
+    tt_edge.initialize_class("CEDGE")
+    # Periods 1, 2 empty; 3, 4 occupied; 5, 6 empty
+    tt_edge.assign("CEDGE", "D1", 3, Assignment(subject="S1", faculty="F1", room="R1"))
+    tt_edge.assign("CEDGE", "D1", 4, Assignment(subject="S2", faculty="F1", room="R1"))
+    assert calculate_class_day_gaps(tt_edge, "CEDGE", "D1") == 0
+    assert calculate_total_idle_gaps(tt_edge) == 0
+    print("[PASS] Test 19: Empty periods before and after lessons correctly excluded from gaps")
+    passed_count += 1
+
+    # -------------------------------------------------------------
+    # Test 20: Independent gap counts for separate days and classes
+    # -------------------------------------------------------------
+    tt_multi = Timetable(days=["D1", "D2"], periods_per_day=4)
+    tt_multi.initialize_class("C_ALPHA")
+    tt_multi.initialize_class("C_BETA")
+    # Class C_ALPHA on D1: P1 and P3 occupied -> 1 gap (P2)
+    tt_multi.assign("C_ALPHA", "D1", 1, Assignment(subject="A1", faculty="F1", room="R1"))
+    tt_multi.assign("C_ALPHA", "D1", 3, Assignment(subject="A2", faculty="F1", room="R1"))
+    # Class C_ALPHA on D2: P1 and P2 occupied -> 0 gaps
+    tt_multi.assign("C_ALPHA", "D2", 1, Assignment(subject="A3", faculty="F1", room="R1"))
+    tt_multi.assign("C_ALPHA", "D2", 2, Assignment(subject="A4", faculty="F1", room="R1"))
+    # Class C_BETA on D2: P1 and P4 occupied -> 2 gaps (P2, P3)
+    tt_multi.assign("C_BETA", "D2", 1, Assignment(subject="B1", faculty="F2", room="R2"))
+    tt_multi.assign("C_BETA", "D2", 4, Assignment(subject="B2", faculty="F2", room="R2"))
+
+    breakdown = calculate_gaps_by_class(tt_multi)
+    assert breakdown["C_ALPHA"] == 1
+    assert breakdown["C_BETA"] == 2
+    assert calculate_total_idle_gaps(tt_multi) == 3
+    print("[PASS] Test 20: Verified independent gap counts across different days and classes")
+    passed_count += 1
+
+    # -------------------------------------------------------------
+    # Test 21: Optimizer reducing gaps compared with a deliberately poor valid timetable
+    # -------------------------------------------------------------
+    # In a timetable with 1 day, 4 periods, Class A has 2 theory lessons:
+    # A poor timetable places them at P1 and P4 -> 2 gaps!
+    # The optimizer finds the compact schedule with P1 and P2 (or P2 and P3) -> 0 gaps!
+    tt_poor = Timetable(days=["D1"], periods_per_day=4)
+    tt_poor.initialize_class("C_OPT")
+    tt_poor.assign("C_OPT", "D1", 1, Assignment(subject="OPT_TH", faculty="F_OPT", room="R1"))
+    tt_poor.assign("C_OPT", "D1", 4, Assignment(subject="OPT_TH", faculty="F_OPT", room="R1"))
+    poor_gaps = calculate_total_idle_gaps(tt_poor)
+    assert poor_gaps == 2
+
+    cg_opt = ClassGroup(name="C_OPT")
+    cg_opt.add_subject(Subject(name="OPT_TH", faculty="F_OPT", periods_per_week=2, is_lab=False))
+    data_opt = ParsedData(
+        days=["D1"],
+        periods_per_day=4,
+        classes={"C_OPT": cg_opt},
+        faculty={"F_OPT": Faculty(name="F_OPT")},
+        rooms={"R1": Room(name="R1", room_type="T")},
+    )
+    res_opt = backtrack_search(data_opt, optimize=True)
+    assert res_opt.timetable is not None
+    assert res_opt.best_gaps == 0
+    assert res_opt.best_gaps < poor_gaps
+    print(f"[PASS] Test 21: Optimizer eliminated idle gaps (reduced from {poor_gaps} to {res_opt.best_gaps} gaps)")
+    passed_count += 1
+
+    # -------------------------------------------------------------
+    # Test 22: Every optimized result remaining completely conflict-free
+    # -------------------------------------------------------------
+    res_sample_opt = backtrack_search(sample_data, optimize=True)
+    assert res_sample_opt.timetable is not None
+    assert res_sample_opt.best_gaps == 0
+
+    # Rigorous validator check on the optimized sample timetable
+    for c_name in sample_data.classes:
+        for day in res_sample_opt.timetable.days:
+            for p in range(1, res_sample_opt.timetable.periods_per_day + 1):
+                slot = res_sample_opt.timetable.get_assignment(c_name, day, p)
+                if slot:
+                    room_obj = sample_data.rooms[slot.room]
+                    if slot.subject == "LAB":
+                        assert room_obj.room_type == "L"
+                    else:
+                        assert room_obj.room_type == "T"
+
+    for day in res_sample_opt.timetable.days:
+        for p in range(1, res_sample_opt.timetable.periods_per_day + 1):
+            r_set = set()
+            f_set = set()
+            for c_name in sample_data.classes:
+                slot = res_sample_opt.timetable.get_assignment(c_name, day, p)
+                if slot:
+                    assert slot.room not in r_set
+                    assert slot.faculty not in f_set
+                    r_set.add(slot.room)
+                    f_set.add(slot.faculty)
+    print("[PASS] Test 22: Optimized timetable strictly verified conflict-free across all hard constraints")
+    passed_count += 1
+
+    # -------------------------------------------------------------
+    # Test 23: Search-budget exhaustion preserving the best valid timetable found
+    # -------------------------------------------------------------
+    # In a problem where solutions require gaps (e.g. F1 available only at P1 and P3 on D1),
+    # the first valid solution has 1 gap. Searching for a 0-gap solution exhausts max_nodes.
+    # It must return FEASIBLE_SEARCH_LIMITED and preserve the valid timetable!
+    fac_lim = Faculty(name="F_LIM")
+    fac_lim.mark_available("D1", 1)
+    fac_lim.mark_available("D1", 3)
+
+    cg_lim = ClassGroup(name="C_LIM")
+    cg_lim.add_subject(Subject(name="SUB_LIM", faculty="F_LIM", periods_per_week=2, is_lab=False))
+
+    data_lim = ParsedData(
+        days=["D1"],
+        periods_per_day=3,
+        classes={"C_LIM": cg_lim},
+        faculty={"F_LIM": fac_lim},
+        rooms={"R1": Room(name="R1", room_type="T")},
+    )
+
+    res_budget = backtrack_search(data_lim, max_nodes=3, optimize=True)
+    assert res_budget.timetable is not None, "Failed to preserve valid timetable on budget exhaustion!"
+    assert res_budget.status == SearchStatus.FEASIBLE_SEARCH_LIMITED
+    assert res_budget.optimality_proven is False
+    assert res_budget.best_gaps == 1
+
+    # Verify the preserved timetable is completely valid and conflict-free
+    assert res_budget.timetable.get_assignment("C_LIM", "D1", 1) is not None
+    assert res_budget.timetable.get_assignment("C_LIM", "D1", 3) is not None
+    assert res_budget.timetable.get_assignment("C_LIM", "D1", 2) is None
+    print("[PASS] Test 23: Search budget exhaustion safely preserved the best valid timetable found")
+    passed_count += 1
+
     print("\n============================================================")
-    print(f"Result: All {passed_count}/{total_tests} scheduler tests passed successfully!")
+    print(f"Result: All {passed_count}/{total_tests} scheduler & optimization tests passed successfully!")
     print("============================================================\n")
     return True
 

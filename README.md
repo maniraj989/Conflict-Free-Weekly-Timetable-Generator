@@ -111,32 +111,34 @@ Implemented in [`validator.py`](validator.py), the conflict checker evaluates ca
 
 ---
 
----
+## 🔍 Backtracking Search & Gap Optimization
 
-## 🔍 Backtracking Search with Forward Checking & MRV
+Implemented in [`search.py`](search.py) and integrated into [`scheduler.py`](scheduler.py), the scheduling engine combines Constraint Satisfaction Search with branch-and-bound idle gap optimization:
 
-Implemented in [`search.py`](search.py) and integrated into [`scheduler.py`](scheduler.py), the scheduling engine employs a Constraint Satisfaction Problem (CSP) search engine:
+### 1. Discrete Units of Work (`SchedulingUnit`):
+- **Theory**: Represented as 1-period atomic units.
+- **Laboratory**: Represented as 2-consecutive-period atomic blocks placed and rolled back together.
 
-### Core Concepts:
-1. **Discrete Units of Work (`SchedulingUnit`)**:
-   - **Theory**: Represented as 1-period atomic units.
-   - **Laboratory**: Represented as 2-consecutive-period atomic blocks.
-2. **Minimum Remaining Values (MRV) Heuristic**:
-   - At each decision point, dynamically selects the unscheduled requirement with the fewest valid candidate placements.
-   - Constrained subjects (and 2-period lab blocks) are prioritized first to fail fast and drastically shrink the search tree.
-3. **Forward Checking**:
-   - After each tentative assignment, inspects all remaining unscheduled units.
-   - If any remaining unit loses all valid placement options (domain size becomes 0), the search rejects the tentative assignment and backtracks immediately without descending further.
-4. **Reversible Assignments**:
-   - Tentative placements are applied strictly using the non-mutating validators `can_place_subject` and `can_place_lab_block`.
-   - On backtrack, only the assignments belonging to the active search branch are reverted (both consecutive slots for labs are undone together).
-5. **Configurable Search Node Limits**:
-   - Guarded by a `max_nodes` parameter (default: 5000) to protect runtime against exponential combinatorial blowups.
-   - If the limit is exhausted, returns `LIMIT_REACHED` with diagnostic information rather than erroneously claiming the input is infeasible.
-6. **Explicit Search Outcomes**:
-   - `SOLVED`: An optimal, completely conflict-free timetable was found.
-   - `INFEASIBLE`: The problem was thoroughly explored and proven impossible under the given constraints.
-   - `LIMIT_REACHED`: Search terminated due to budget limits.
+### 2. Search Heuristics & Propagation:
+- **Minimum Remaining Values (MRV)**: Dynamically prioritizes the unscheduled requirement with the fewest valid candidate placements (failing fast and pruning unpromising branches).
+- **Forward Checking**: Evaluates remaining unscheduled requirements after every tentative placement. If any requirement loses all valid placements (domain size = 0), the branch is immediately pruned.
+- **Reversible Assignments**: Placements are made via `can_place_subject` and `can_place_lab_block`. Backtracking safely unassigns slots only within the current search branch.
+
+### 3. Idle Gap Definition & Optimization Objective:
+- **Gap Metric**: An empty period is counted as an idle gap **only** when it lies strictly between the first and last occupied periods of the same class cohort on the same day.
+- **Excluded**: Empty periods before the first lesson or after the last lesson are **not** counted as gaps. Gaps across different days are never counted.
+- **Objective**: Minimize total class idle gaps across all student groups and active days while strictly preserving all hard constraints.
+- **Best-So-Far Retention**: Tracks and updates the best valid timetable found. If the node limit is reached after finding a valid schedule, the best timetable is returned with status `FEASIBLE_SEARCH_LIMITED` rather than being discarded.
+
+### 4. Search Outcomes:
+- `OPTIMAL`: Optimal conflict-free timetable found and proven to minimize idle gaps.
+- `FEASIBLE_SEARCH_LIMITED`: A valid conflict-free timetable was found, but search terminated due to node budget before proving global optimality.
+- `INFEASIBLE`: Search space fully explored with zero valid schedules satisfying all hard constraints.
+- `LIMIT_REACHED`: Search terminated due to node limit before discovering any valid schedule.
+
+### 5. Known Limitations:
+- **Optimization Budget**: Exhaustive search over very large instances can hit the `max_nodes` budget, in which case the best-known feasible timetable is returned without a mathematical guarantee of global optimality.
+- **Faculty Idle Gaps**: The current objective specifically targets student class cohort gaps; instructor gap minimization can be layered on in future iterations.
 
 ---
 
@@ -149,12 +151,12 @@ Implemented in [`search.py`](search.py) and integrated into [`scheduler.py`](sch
 
 ## 🛠️ Instructions for Running the Application
 
-1. **Run Conflict-Free Scheduler with Backtracking**:
+1. **Run Conflict-Free Scheduler with Gap Optimization**:
    ```bash
    python main.py --schedule
    ```
 
-2. **Run All Unit Test Suites (10 Validator Tests + 16 Scheduler Tests)**:
+2. **Run All Unit Test Suites (10 Validator Tests + 23 Scheduler Tests = 33 Tests)**:
    ```bash
    python main.py --test
    # or run individually:

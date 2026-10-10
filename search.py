@@ -1,12 +1,16 @@
-"""Backtracking search with Forward Checking and Minimum Remaining Values (MRV).
+"""Backtracking search with Forward Checking, MRV heuristic, and Gap Optimization.
 
-Provides constraint-satisfaction scheduling for weekly academic timetables:
+Provides constraint-satisfaction scheduling and idle-gap minimization:
 - Each theory session is a 1-period unit of work.
 - Each laboratory session is a 2-consecutive-period unit of work placed atomically.
 - Enforces MRV heuristic (choosing unit with fewest valid candidates).
 - Enforces Forward Checking (pruning branches immediately if any remaining unit loses all valid candidates).
 - Implements reversible assignments (safely unassigning slots on backtracking).
-- Provides configurable search-node limit to protect execution time.
+- Optimizes for student cohort compactness by minimizing class idle gaps.
+- Gap metric: An empty period strictly between the first and last occupied periods
+  of the same class on the same day.
+- Configurable search budget limit with clear distinction between optimal,
+  partially optimized, and infeasible outcomes.
 """
 
 from dataclasses import dataclass, field
@@ -21,6 +25,8 @@ class SearchStatus(str, Enum):
     """Status outcomes for constraint satisfaction search."""
 
     SOLVED = "SOLVED"
+    OPTIMAL = "OPTIMAL"
+    FEASIBLE_SEARCH_LIMITED = "FEASIBLE_SEARCH_LIMITED"
     INFEASIBLE = "INFEASIBLE"
     LIMIT_REACHED = "LIMIT_REACHED"
 
@@ -65,6 +71,76 @@ class SearchResult:
     max_nodes: int
     message: str
     assignments_made: int
+    initial_gaps: Optional[int] = None
+    best_gaps: Optional[int] = None
+    optimality_proven: bool = False
+
+
+def calculate_class_day_gaps(timetable: Timetable, class_name: str, day: str) -> int:
+    """Calculate the number of idle gap periods for a class on a single day.
+
+    Rules:
+    - An empty period is counted as an idle gap ONLY if it lies strictly between
+      the first and last occupied periods of that class on that day.
+    - Empty periods before the first class or after the last class are NOT gaps.
+    - Gaps across different days are never counted.
+    - Each qualifying empty class-period is counted once.
+    """
+    if class_name not in timetable.grid or day not in timetable.grid[class_name]:
+        return 0
+
+    occupied_periods = [
+        p
+        for p in range(1, timetable.periods_per_day + 1)
+        if timetable.grid[class_name][day].get(p) is not None
+    ]
+
+    if len(occupied_periods) < 2:
+        return 0
+
+    first_p = min(occupied_periods)
+    last_p = max(occupied_periods)
+
+    gaps = 0
+    for p in range(first_p + 1, last_p):
+        if timetable.grid[class_name][day].get(p) is None:
+            gaps += 1
+
+    return gaps
+
+
+def calculate_total_idle_gaps(timetable: Timetable) -> int:
+    """Calculate total idle gap periods across all classes and days."""
+    total_gaps = 0
+    for class_name in timetable.grid:
+        for day in timetable.days:
+            total_gaps += calculate_class_day_gaps(timetable, class_name, day)
+    return total_gaps
+
+
+def calculate_gaps_by_class(timetable: Timetable) -> Dict[str, int]:
+    """Calculate idle gaps broken down by class group."""
+    breakdown = {}
+    for class_name in timetable.grid:
+        class_gaps = sum(
+            calculate_class_day_gaps(timetable, class_name, day)
+            for day in timetable.days
+        )
+        breakdown[class_name] = class_gaps
+    return breakdown
+
+
+def clone_timetable(timetable: Timetable) -> Timetable:
+    """Create a deep copy of a Timetable instance."""
+    cloned = Timetable(
+        days=list(timetable.days),
+        periods_per_day=timetable.periods_per_day,
+    )
+    for c_name, days_dict in timetable.grid.items():
+        cloned.grid[c_name] = {}
+        for day, p_dict in days_dict.items():
+            cloned.grid[c_name][day] = dict(p_dict)
+    return cloned
 
 
 def create_scheduling_units(parsed_data: ParsedData) -> List[SchedulingUnit]:
@@ -78,7 +154,6 @@ def create_scheduling_units(parsed_data: ParsedData) -> List[SchedulingUnit]:
     for class_name, group in parsed_data.classes.items():
         for subject in group.subjects:
             if subject.is_lab:
-                # 2 periods per lab block
                 num_blocks = subject.periods_per_week // 2
                 for block_idx in range(1, num_blocks + 1):
                     units.append(
@@ -92,7 +167,6 @@ def create_scheduling_units(parsed_data: ParsedData) -> List[SchedulingUnit]:
                         )
                     )
             else:
-                # 1 period per theory session
                 for period_idx in range(1, subject.periods_per_week + 1):
                     units.append(
                         SchedulingUnit(
@@ -215,9 +289,11 @@ def undo_assignment(
 
 
 def backtrack_search(
-    parsed_data: ParsedData, max_nodes: int = 5000
+    parsed_data: ParsedData,
+    max_nodes: int = 5000,
+    optimize: bool = True,
 ) -> SearchResult:
-    """Find a conflict-free timetable using Backtracking, Forward Checking, and MRV.
+    """Find a conflict-free timetable using Backtracking, Forward Checking, MRV, and Gap Optimization.
 
     Features:
     - Minimum Remaining Values (MRV): Prioritizes the unscheduled unit with the fewest
@@ -225,14 +301,19 @@ def backtrack_search(
     - Forward Checking: Evaluates remaining unscheduled units after every tentative assignment.
       If any remaining unit has 0 valid options, the branch is rolled back immediately.
     - Reversible assignments: Only removes tentative assignments belonging to the active branch.
-    - Search limit: Protects against combinatorial explosions, returning LIMIT_REACHED if exceeded.
+    - Gap Optimization: Evaluates complete candidate timetables by total idle gaps.
+      Retains the best valid timetable found so far.
+    - Search limit: Protects against combinatorial explosions. If budget runs out after finding
+      a valid timetable, returns that timetable with FEASIBLE_SEARCH_LIMITED status without
+      falsely claiming infeasibility or global optimality.
 
     Args:
         parsed_data: Parsed timetable configuration.
         max_nodes: Maximum number of search nodes (variable assignments attempted) allowed.
+        optimize: If True, searches across candidate timetables to minimize idle gaps.
 
     Returns:
-        SearchResult indicating SOLVED, INFEASIBLE, or LIMIT_REACHED.
+        SearchResult indicating OPTIMAL, FEASIBLE_SEARCH_LIMITED, INFEASIBLE, or LIMIT_REACHED.
     """
     timetable = Timetable(
         days=list(parsed_data.days),
@@ -245,11 +326,34 @@ def backtrack_search(
     nodes_explored = 0
     limit_reached = False
 
-    def solve(remaining_units: List[SchedulingUnit]) -> bool:
-        nonlocal nodes_explored, limit_reached
+    best_timetable: Optional[Timetable] = None
+    best_gaps: Optional[int] = None
+    initial_gaps: Optional[int] = None
+    optimality_proven = False
 
+    def solve(remaining_units: List[SchedulingUnit]) -> bool:
+        nonlocal nodes_explored, limit_reached, best_timetable, best_gaps, initial_gaps, optimality_proven
+
+        # Base case: Complete valid timetable constructed!
         if not remaining_units:
-            return True
+            current_gaps = calculate_total_idle_gaps(timetable)
+            if initial_gaps is None:
+                initial_gaps = current_gaps
+
+            if best_gaps is None or current_gaps < best_gaps:
+                best_gaps = current_gaps
+                best_timetable = clone_timetable(timetable)
+
+            if not optimize:
+                return True
+
+            # 0 gaps is the theoretical global minimum (cannot have negative gaps)
+            if best_gaps == 0:
+                optimality_proven = True
+                return True
+
+            # Continue searching other branches to find fewer gaps
+            return False
 
         if nodes_explored >= max_nodes:
             limit_reached = True
@@ -261,18 +365,15 @@ def backtrack_search(
         unit_candidates: List[Tuple[SchedulingUnit, List[CandidatePlacement]]] = []
         for unit in remaining_units:
             candidates = find_valid_candidates(timetable, unit, parsed_data)
-            # Forward check before picking: if any unit has 0 options, prune immediately
             if not candidates:
                 return False
             unit_candidates.append((unit, candidates))
 
         # MRV Heuristic: Sort by fewest candidates first
-        # Tie-breakers: labs first (larger 2-period constraint), then deterministic unit_id
         unit_candidates.sort(
             key=lambda item: (len(item[1]), 0 if item[0].is_lab else 1, item[0].unit_id)
         )
         chosen_unit, candidates = unit_candidates[0]
-
         other_units = [u for u in remaining_units if u.unit_id != chosen_unit.unit_id]
 
         for placement in candidates:
@@ -280,10 +381,9 @@ def backtrack_search(
                 limit_reached = True
                 return False
 
-            # 1. Tentative assignment
             apply_assignment(timetable, chosen_unit, placement)
 
-            # 2. Forward checking on remaining units
+            # Forward checking on remaining units
             forward_check_failed = False
             for rem_unit in other_units:
                 rem_options = find_valid_candidates(timetable, rem_unit, parsed_data)
@@ -291,35 +391,54 @@ def backtrack_search(
                     forward_check_failed = True
                     break
 
-            # 3. Recurse if forward check passed
             if not forward_check_failed:
                 if solve(other_units):
                     return True
 
-            # 4. Rollback / Backtrack
             undo_assignment(timetable, chosen_unit, placement)
 
         return False
 
     success = solve(units)
 
-    if success:
+    # 1. Solution was found
+    if best_timetable is not None:
+        if success or (not limit_reached):
+            status = SearchStatus.OPTIMAL
+            optimality_proven = True
+            msg = f"Optimal conflict-free timetable found with {best_gaps} idle gaps."
+        else:
+            status = SearchStatus.FEASIBLE_SEARCH_LIMITED
+            optimality_proven = False
+            msg = (
+                f"Search limit reached ({nodes_explored}/{max_nodes} nodes explored). "
+                f"Retained best conflict-free timetable with {best_gaps} idle gaps (optimality not proven)."
+            )
+
         return SearchResult(
-            status=SearchStatus.SOLVED,
-            timetable=timetable,
+            status=status,
+            timetable=best_timetable,
             nodes_explored=nodes_explored,
             max_nodes=max_nodes,
-            message="Optimal conflict-free timetable found successfully.",
+            message=msg,
             assignments_made=len(units),
+            initial_gaps=initial_gaps,
+            best_gaps=best_gaps,
+            optimality_proven=optimality_proven,
         )
-    elif limit_reached:
+
+    # 2. No solution found
+    if limit_reached:
         return SearchResult(
             status=SearchStatus.LIMIT_REACHED,
             timetable=None,
             nodes_explored=nodes_explored,
             max_nodes=max_nodes,
-            message=f"Configured search limit reached ({nodes_explored}/{max_nodes} nodes explored) before a complete solution could be found.",
+            message=f"Configured search limit reached ({nodes_explored}/{max_nodes} nodes explored) before finding any complete timetable.",
             assignments_made=0,
+            initial_gaps=None,
+            best_gaps=None,
+            optimality_proven=False,
         )
     else:
         return SearchResult(
@@ -329,4 +448,7 @@ def backtrack_search(
             max_nodes=max_nodes,
             message="No feasible conflict-free timetable exists for the given constraints and resources.",
             assignments_made=0,
+            initial_gaps=None,
+            best_gaps=None,
+            optimality_proven=False,
         )

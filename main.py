@@ -50,7 +50,7 @@ def main() -> None:
         print("=" * 70)
         print("       Conflict-Free Weekly Timetable Generator")
         print("=" * 70)
-        print("Step 7: Backtracking with Forward Checking & MRV Heuristic")
+        print("Step 8: Backtracking, Forward Checking & Gap Optimization")
         print("=" * 70)
 
         # File argument if provided alongside --schedule, otherwise sample input
