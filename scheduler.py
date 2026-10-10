@@ -9,14 +9,7 @@ Provides:
 
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional, Tuple
-from models import (
-    DEFAULT_FACULTY_REGISTRY,
-    SUBJECT_CATALOG,
-    Assignment,
-    Timetable,
-    format_faculty_label,
-    get_faculty_display_name,
-)
+from models import Assignment, Timetable
 from parser import ParsedData
 from search import (
     CandidatePlacement,
@@ -48,11 +41,6 @@ class SubjectScheduleStatus:
     remaining_periods: int
     status: str  # "COMPLETED", "PARTIAL", "UNSCHEDULED", "PENDING_LAB"
     notes: str = ""
-    faculty_display_name: str = ""
-
-    def __post_init__(self) -> None:
-        if not self.faculty_display_name:
-            self.faculty_display_name = get_faculty_display_name(self.faculty)
 
 
 @dataclass
@@ -473,7 +461,7 @@ def print_timetable_grid(timetable: Timetable) -> None:
     for class_name, days_dict in timetable.grid.items():
         print(f"\n--- Timetable for Class Group: {class_name} ---")
 
-        col_width = 28
+        col_width = 22
         period_headers = [
             f"Period {p}".center(col_width)
             for p in range(1, timetable.periods_per_day + 1)
@@ -489,8 +477,7 @@ def print_timetable_grid(timetable: Timetable) -> None:
             for p in range(1, timetable.periods_per_day + 1):
                 slot = days_dict.get(day, {}).get(p)
                 if slot:
-                    fac_name = getattr(slot, "faculty_display_name", "") or get_faculty_display_name(slot.faculty)
-                    cell_text = f"{slot.subject} ({fac_name}, {slot.room})"
+                    cell_text = f"{slot.subject} ({slot.faculty}, {slot.room})"
                 else:
                     cell_text = "---"
                 row_cells.append(cell_text.center(col_width))
@@ -547,26 +534,14 @@ def print_scheduling_report(report: SchedulingReport) -> None:
 
     print("\n5. Detailed Breakdown by Subject:")
     for status in report.subject_statuses:
-        type_str = "Laboratory" if status.is_lab else "Theory"
+        type_str = "Lab" if status.is_lab else "Theory"
         ratio = f"{status.scheduled_periods}/{status.required_periods}"
-        fac_lbl = format_faculty_label(status.faculty)
         print(
-            f"   - [{status.class_name}] {status.subject_name:<8} ({type_str:<10}) | "
-            f"Faculty: {fac_lbl:<24} | {ratio} placed [{status.status}]"
+            f"   - [{status.class_name}] {status.subject_name:<5} ({type_str:<6}) | "
+            f"Faculty: {status.faculty:<3} | {ratio} placed [{status.status}]"
         )
         if status.notes:
             print(f"     Note: {status.notes}")
-
-    # 6. Report unconfigured catalog subjects
-    configured_names = {s.subject_name for s in report.subject_statuses}
-    unconfigured = [s for s in SUBJECT_CATALOG if s not in configured_names]
-    if unconfigured:
-        print("\n6. Unconfigured Catalog Subjects (Information required before real schedule generation):")
-        for u in unconfigured:
-            u_type = "Laboratory" if SUBJECT_CATALOG[u] else "Theory"
-            print(
-                f"   - {u:<8} [{u_type:<10}] : Requires student cohort assignment, instructor assignment, and period count."
-            )
 
 
 def run_scheduler_tests() -> bool:
@@ -870,7 +845,7 @@ def run_scheduler_tests() -> bool:
                 slot = tt_full.get_assignment(c_name, day, p)
                 if slot:
                     room_obj = sample_data.rooms[slot.room]
-                    is_lab_slot = slot.subject.endswith("LAB") or slot.subject in ("LAB", "DSA LAB", "OS LAB")
+                    is_lab_slot = (slot.subject == "LAB")
                     if is_lab_slot:
                         assert room_obj.room_type == "L"
                     else:
@@ -1032,7 +1007,7 @@ def run_scheduler_tests() -> bool:
                 slot = res_sample_opt.timetable.get_assignment(c_name, day, p)
                 if slot:
                     room_obj = sample_data.rooms[slot.room]
-                    if slot.subject.endswith("LAB") or slot.subject in ("LAB", "DSA LAB", "OS LAB"):
+                    if slot.subject == "LAB":
                         assert room_obj.room_type == "L"
                     else:
                         assert room_obj.room_type == "T"

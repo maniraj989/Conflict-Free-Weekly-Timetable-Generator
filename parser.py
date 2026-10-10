@@ -12,27 +12,15 @@ is_lab is 0 for theory and 1 for laboratory.
 """
 
 from dataclasses import dataclass, field
-from typing import Dict, List, Optional
-from models import (
-    DEFAULT_FACULTY_REGISTRY,
-    SUBJECT_CATALOG,
-    ClassGroup,
-    Faculty,
-    Room,
-    Subject,
-    format_faculty_label,
-    get_faculty_display_name,
-)
+from typing import Dict, List
+from models import ClassGroup, Faculty, Room, Subject
 
-# Demonstration configuration showing the Subject Catalog and Faculty Registry.
-# NOTE: These subject-to-faculty assignments and period counts are demonstration
-# values for testing/sample execution, and are NOT confirmed real assignments.
 SAMPLE_INPUT = """2 3
 4
-X DSA F1 2 0
-X DSA LAB F2 2 1
-Y OS F1 2 0
-Y OS LAB F3 2 1
+X TH F1 2 0
+X LAB F2 2 1
+Y TH F1 2 0
+Y LAB F3 2 1
 3
 R1 T
 R2 T
@@ -49,7 +37,6 @@ class ParsedData:
         classes: Mapping of class name to ClassGroup object.
         faculty: Mapping of faculty name to unique Faculty object.
         rooms: Mapping of room name to Room object.
-        faculty_registry: Mapping of faculty ID to full display name.
     """
 
     days: List[str]
@@ -57,9 +44,6 @@ class ParsedData:
     classes: Dict[str, ClassGroup] = field(default_factory=dict)
     faculty: Dict[str, Faculty] = field(default_factory=dict)
     rooms: Dict[str, Room] = field(default_factory=dict)
-    faculty_registry: Dict[str, str] = field(
-        default_factory=lambda: dict(DEFAULT_FACULTY_REGISTRY)
-    )
 
     @property
     def total_subject_entries(self) -> int:
@@ -182,16 +166,6 @@ def parse_timetable_input(input_text: str) -> ParsedData:
             )
         is_lab = is_lab_str == "1"
 
-        if subject_name in SUBJECT_CATALOG:
-            expected_is_lab = SUBJECT_CATALOG[subject_name]
-            if is_lab != expected_is_lab:
-                expected_type = "Laboratory (1)" if expected_is_lab else "Theory (0)"
-                actual_type = "Laboratory (1)" if is_lab else "Theory (0)"
-                raise ValueError(
-                    f"Line {line_num}: Subject '{subject_name}' is catalogued as {expected_type}, "
-                    f"but configured as {actual_type} (is_lab={is_lab_str})."
-                )
-
         # Reuse single Faculty object for each unique faculty name
         if faculty_name not in faculty:
             faculty[faculty_name] = Faculty(name=faculty_name)
@@ -287,15 +261,13 @@ def print_parsed_summary(data: ParsedData) -> None:
     for class_name, group in data.classes.items():
         print(f"   - Class '{class_name}' ({len(group.subjects)} subjects):")
         for sub in group.subjects:
-            type_str = "Laboratory" if sub.is_lab else "Theory"
-            fac_lbl = format_faculty_label(sub.faculty, data.faculty_registry)
+            type_str = "Lab" if sub.is_lab else "Theory"
             print(
-                f"     * {sub.name:<8} [{type_str:<10}] | Faculty: {fac_lbl:<24} | {sub.periods_per_week} periods/week"
+                f"     * {sub.name:<4} [{type_str:<6}] | Faculty: {sub.faculty} | {sub.periods_per_week} periods/week"
             )
 
     print(f"\n3. Faculty ({len(data.faculty)} unique instructors):")
     for f_name in sorted(data.faculty.keys()):
-        fac_lbl = format_faculty_label(f_name, data.faculty_registry)
         associated_classes = [
             c_name
             for c_name, cg in data.classes.items()
@@ -303,24 +275,9 @@ def print_parsed_summary(data: ParsedData) -> None:
         ]
         classes_str = ", ".join(associated_classes)
         note = " (SHARED across classes)" if len(associated_classes) > 1 else ""
-        print(f"   - {fac_lbl}: Assigned to class(es) [{classes_str}]{note}")
+        print(f"   - {f_name}: Assigned to class(es) [{classes_str}]{note}")
 
     print(f"\n4. Rooms ({len(data.rooms)} venues):")
     for r_name, room in data.rooms.items():
         room_label = "Theory" if room.room_type == "T" else "Laboratory"
         print(f"   - {r_name:<4} [Type: {room.room_type} ({room_label})]")
-
-    # 5. Report catalog subjects that are not yet configured in this schedule
-    configured_subject_names = {
-        sub.name for cg in data.classes.values() for sub in cg.subjects
-    }
-    unconfigured_catalog_subjects = [
-        s for s in SUBJECT_CATALOG if s not in configured_subject_names
-    ]
-    if unconfigured_catalog_subjects:
-        print("\n5. Unconfigured Catalog Subjects (Information required before real schedule generation):")
-        for u_sub in unconfigured_catalog_subjects:
-            u_type = "Laboratory" if SUBJECT_CATALOG[u_sub] else "Theory"
-            print(
-                f"   - {u_sub:<8} [{u_type:<10}] : Pending student class group, instructor assignment, and weekly periods."
-            )

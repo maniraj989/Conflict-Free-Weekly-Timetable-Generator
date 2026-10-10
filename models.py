@@ -13,60 +13,22 @@ from dataclasses import dataclass, field
 from typing import Dict, List, Optional, Set, Tuple
 
 
-DEFAULT_FACULTY_REGISTRY: Dict[str, str] = {
-    "F1": "Dr.Deena Rose",
-    "F2": "Dr.V.Mani",
-    "F3": "Dr.Jegan",
-    "F4": "Dr.S.Sakthviel",
-}
-
-SUBJECT_CATALOG: Dict[str, bool] = {
-    "APP": False,       # Theory
-    "COA": False,       # Theory
-    "DSA": False,       # Theory
-    "DSA LAB": True,    # Laboratory
-    "OS": False,        # Theory
-    "OS LAB": True,     # Laboratory
-}
-
-
-def get_faculty_display_name(faculty_id: str, registry: Optional[Dict[str, str]] = None) -> str:
-    """Return the display name for a faculty ID using the registry (or default)."""
-    reg = registry if registry is not None else DEFAULT_FACULTY_REGISTRY
-    return reg.get(faculty_id, faculty_id)
-
-
-def format_faculty_label(faculty_id: str, registry: Optional[Dict[str, str]] = None) -> str:
-    """Format faculty with display name and ID, e.g. 'Dr.Deena Rose (F1)' or 'F1'."""
-    display = get_faculty_display_name(faculty_id, registry)
-    if display and display != faculty_id:
-        return f"{display} ({faculty_id})"
-    return faculty_id
-
-
 @dataclass
 class Assignment:
     """Represents a scheduled class session.
 
     Attributes:
-        subject: The name of the subject being taught.
-        faculty: The internal ID of the instructor teaching the class (e.g. 'F1').
-        room: The name of the room or lab allocated for the session.
-        faculty_display_name: Full display name of the instructor (e.g. 'Dr.Deena Rose').
+        subject: The name of the subject being taught (e.g. 'TH', 'LAB').
+        faculty: The faculty ID of the instructor (e.g. 'F1', 'F2').
+        room: The name of the room or lab allocated for the session (e.g. 'R1', 'L1').
     """
 
     subject: str
     faculty: str
     room: str
-    faculty_display_name: str = ""
-
-    def __post_init__(self) -> None:
-        if not self.faculty_display_name:
-            self.faculty_display_name = get_faculty_display_name(self.faculty)
 
     def __str__(self) -> str:
-        fac_lbl = format_faculty_label(self.faculty)
-        return f"{self.subject} [Faculty: {fac_lbl}, Room: {self.room}]"
+        return f"{self.subject} [Faculty: {self.faculty}, Room: {self.room}]"
 
 
 @dataclass
@@ -74,22 +36,16 @@ class Subject:
     """Represents a course/subject to be scheduled.
 
     Attributes:
-        name: Name of the subject (e.g., 'DSA', 'DSA LAB', 'OS').
-        faculty: Internal faculty ID of assigned instructor (e.g., 'F1').
+        name: Name of the subject (e.g., 'TH', 'LAB').
+        faculty: Faculty ID of the assigned instructor (e.g., 'F1').
         periods_per_week: Total number of weekly periods needed for this subject.
         is_lab: Boolean indicating whether this subject requires a laboratory venue.
-        faculty_display_name: Full display name of the assigned instructor.
     """
 
     name: str
     faculty: str
     periods_per_week: int
     is_lab: bool = False
-    faculty_display_name: str = ""
-
-    def __post_init__(self) -> None:
-        if not self.faculty_display_name:
-            self.faculty_display_name = get_faculty_display_name(self.faculty)
 
 
 @dataclass
@@ -97,7 +53,7 @@ class ClassGroup:
     """Represents a student cohort, batch, or section.
 
     Attributes:
-        name: Name or identifier of the class (e.g., 'CS-Year2-SecA').
+        name: Name or identifier of the class (e.g., 'X', 'Y').
         subjects: List of subjects that this class group is required to take.
     """
 
@@ -114,19 +70,13 @@ class Faculty:
     """Represents a teacher or instructor.
 
     Attributes:
-        name: Internal ID of the faculty member (e.g. 'F1').
+        name: Faculty identifier (e.g., 'F1', 'F2', 'F3').
         availability: Set of (day, period) tuples representing available time slots.
                       If empty, the faculty member is considered available for all slots.
-        display_name: Full display name of the instructor (e.g. 'Dr.Deena Rose').
     """
 
     name: str
     availability: Set[Tuple[str, int]] = field(default_factory=set)
-    display_name: str = ""
-
-    def __post_init__(self) -> None:
-        if not self.display_name:
-            self.display_name = get_faculty_display_name(self.name)
 
     def is_available(self, day: str, period: int) -> bool:
         """Check if the faculty member is available at a given day and period.

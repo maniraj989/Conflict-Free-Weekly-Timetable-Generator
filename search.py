@@ -288,6 +288,89 @@ def undo_assignment(
             timetable.grid[unit.class_name][placement.day][placement.start_period + 1] = None
 
 
+def diagnose_blocking_constraint(parsed_data: ParsedData) -> str:
+    """Analyze timetable requirements to identify the specific constraint that blocks scheduling."""
+    total_slots_per_class = len(parsed_data.days) * parsed_data.periods_per_day
+    theory_rooms = [r for r in parsed_data.rooms.values() if r.room_type == "T"]
+    lab_rooms = [r for r in parsed_data.rooms.values() if r.room_type == "L"]
+
+    # 1. Check if lab exists but daily periods < 2
+    has_lab = any(s.is_lab for cg in parsed_data.classes.values() for s in cg.subjects)
+    if has_lab and parsed_data.periods_per_day < 2:
+        return f"Daily periods ({parsed_data.periods_per_day}) is less than 2, preventing 2-consecutive-period lab scheduling."
+
+    # 2. Check room type existence
+    has_theory = any(not s.is_lab for cg in parsed_data.classes.values() for s in cg.subjects)
+    if has_theory and not theory_rooms:
+        return "Missing theory room (no room with room_type 'T' exists for theory subjects)."
+    if has_lab and not lab_rooms:
+        return "Missing laboratory room (no room with room_type 'L' exists for laboratory subjects)."
+
+    # 3. Check individual class capacity
+    for c_name, cg in parsed_data.classes.items():
+        class_req = sum(s.periods_per_week for s in cg.subjects)
+        if class_req > total_slots_per_class:
+            return (
+                f"Class slot capacity exceeded for '{c_name}' "
+                f"(requires {class_req} periods, but only {total_slots_per_class} slots exist in the week)."
+            )
+
+    # 4. Check faculty total capacity
+    faculty_periods: Dict[str, int] = {}
+    for cg in parsed_data.classes.values():
+        for s in cg.subjects:
+            faculty_periods[s.faculty] = faculty_periods.get(s.faculty, 0) + s.periods_per_week
+
+    for f_id, total_req in faculty_periods.items():
+        f_obj = parsed_data.faculty.get(f_id)
+        max_avail = len(f_obj.availability) if (f_obj and f_obj.availability) else total_slots_per_class
+        if total_req > max_avail:
+            return (
+                f"Faculty capacity conflict for '{f_id}' "
+                f"(assigned {total_req} periods across classes, but maximum available slots is {max_avail})."
+            )
+
+    # 5. Check aggregate theory room capacity
+    total_theory_req = sum(
+        s.periods_per_week for cg in parsed_data.classes.values() for s in cg.subjects if not s.is_lab
+    )
+    max_theory_room_capacity = len(theory_rooms) * total_slots_per_class
+    if total_theory_req > max_theory_room_capacity:
+        return (
+            f"Theory room capacity exceeded "
+            f"(requires {total_theory_req} theory periods, but {len(theory_rooms)} theory room(s) provide at most {max_theory_room_capacity} slots)."
+        )
+
+    # 6. Check aggregate lab room capacity
+    total_lab_req = sum(
+        s.periods_per_week for cg in parsed_data.classes.values() for s in cg.subjects if s.is_lab
+    )
+    max_lab_room_capacity = len(lab_rooms) * total_slots_per_class
+    if total_lab_req > max_lab_room_capacity:
+        return (
+            f"Laboratory room capacity exceeded "
+            f"(requires {total_lab_req} lab periods, but {len(lab_rooms)} lab room(s) provide at most {max_lab_room_capacity} slots)."
+        )
+
+    # 7. Check if any unit has 0 candidates on an empty timetable
+    empty_tt = Timetable(days=list(parsed_data.days), periods_per_day=parsed_data.periods_per_day)
+    for c_name in parsed_data.classes:
+        empty_tt.initialize_class(c_name)
+    units = create_scheduling_units(parsed_data)
+    for u in units:
+        cands = find_valid_candidates(empty_tt, u, parsed_data)
+        if not cands:
+            return (
+                f"No valid venue or slot exists for requirement '{u.unit_id}' "
+                f"(Class: {u.class_name}, Subject: {u.subject.name}, Faculty: {u.faculty}, Lab: {u.is_lab})."
+            )
+
+    # 8. General constraint clash
+    return (
+        "Simultaneous faculty, room, and consecutive-slot availability limits prevent any conflict-free schedule."
+    )
+
+
 def backtrack_search(
     parsed_data: ParsedData,
     max_nodes: int = 5000,
@@ -441,12 +524,13 @@ def backtrack_search(
             optimality_proven=False,
         )
     else:
+        blocking_reason = diagnose_blocking_constraint(parsed_data)
         return SearchResult(
             status=SearchStatus.INFEASIBLE,
             timetable=None,
             nodes_explored=nodes_explored,
             max_nodes=max_nodes,
-            message="No feasible conflict-free timetable exists for the given constraints and resources.",
+            message=f"No feasible conflict-free timetable exists. Blocking constraint: {blocking_reason}",
             assignments_made=0,
             initial_gaps=None,
             best_gaps=None,
