@@ -23,17 +23,17 @@ from scheduler import schedule_timetable
 def build_stress_test_input_text() -> str:
     """Generate the deterministic 10-class, 40-subject timetable input text.
 
-    Curriculum per class (30 periods total):
-    - TH1: 10 periods (is_lab=0)
-    - TH2: 10 periods (is_lab=0)
-    - TH3: 6 periods  (is_lab=0)
-    - LAB: 4 periods  (is_lab=1, 2 two-period blocks)
+    Curriculum per class (30 periods total, all using exact TH and LAB placeholders):
+    - TH (Theory 1): 10 periods (is_lab=0)
+    - TH (Theory 2): 10 periods (is_lab=0)
+    - TH (Theory 3): 6 periods  (is_lab=0)
+    - LAB (Laboratory): 4 periods (is_lab=1, 2 two-period blocks)
 
     Faculty allocation (20 instructors total, load <= 20 periods/week):
-    - TH1: F1 (C1, C2), F2 (C3, C4), F3 (C5, C6), F4 (C7, C8), F5 (C9, C10) -> 20 periods each
-    - TH2: F6 (C2, C3), F7 (C4, C5), F8 (C6, C7), F9 (C8, C9), F10 (C10, C1) -> 20 periods each
-    - TH3: F11 (C1, C4, C7), F12 (C2, C5, C8), F13 (C3, C6, C9) -> 18 periods each; F14 (C10) -> 6 periods
-    - LAB: F15 (C1, C2), F16 (C3, C4), F17 (C5, C6), F18 (C7, C8), F19 (C9, C10) -> 8 periods each
+    - TH (1): F1 (C1, C2), F2 (C3, C4), F3 (C5, C6), F4 (C7, C8), F5 (C9, C10) -> 20 periods each
+    - TH (2): F6 (C2, C3), F7 (C4, C5), F8 (C6, C7), F9 (C8, C9), F10 (C10, C1) -> 20 periods each
+    - TH (3): F11 (C1, C4, C7), F12 (C2, C5, C8), F13 (C3, C6, C9) -> 18 periods each; F14 (C10) -> 6 periods
+    - LAB:    F15 (C1, C2), F16 (C3, C4), F17 (C5, C6), F18 (C7, C8), F19 (C9, C10) -> 8 periods each
 
     Venues (14 rooms total):
     - 10 Theory classrooms: R1 through R10 (room_type 'T')
@@ -48,9 +48,9 @@ def build_stress_test_input_text() -> str:
 
     for i in range(1, 11):
         c = f"C{i}"
-        lines.append(f"{c} TH1 {th1_fac[i]} 10 0")
-        lines.append(f"{c} TH2 {th2_fac[i]} 10 0")
-        lines.append(f"{c} TH3 {th3_fac[i]} 6 0")
+        lines.append(f"{c} TH {th1_fac[i]} 10 0")
+        lines.append(f"{c} TH {th2_fac[i]} 10 0")
+        lines.append(f"{c} TH {th3_fac[i]} 6 0")
         lines.append(f"{c} LAB {lab_fac[i]} 4 1")
 
     lines.append("14")
@@ -132,7 +132,7 @@ def validate_timetable_hard_constraints(
                         errors.append(f"Unknown room '{slot.room}' in assignment for class '{c_name}'.")
                         continue
 
-                    is_lab_slot = slot.subject.startswith("LAB")
+                    is_lab_slot = (slot.subject == "LAB")
                     if is_lab_slot and r_obj.room_type != "L":
                         errors.append(
                             f"Room type mismatch: Lab session '{slot.subject}' assigned to room '{slot.room}' (type '{r_obj.room_type}')."
@@ -148,7 +148,7 @@ def validate_timetable_hard_constraints(
         for day in timetable.days:
             for p in range(1, timetable.periods_per_day + 1):
                 slot = timetable.get_assignment(c_name, day, p)
-                if slot is not None and slot.subject.startswith("LAB"):
+                if slot is not None and slot.subject == "LAB":
                     lab_slots_by_day[day].append((p, slot.faculty, slot.room))
 
         for day, slots in lab_slots_by_day.items():
@@ -207,7 +207,7 @@ def run_stress_test(
     print("=" * 75)
     print("Benchmark Specification:")
     print(" - Class Cohorts:         10 classes (C1 through C10)")
-    print(" - Subject Entries:       40 entries (4 per class: TH1, TH2, TH3, LAB)")
+    print(" - Subject Entries:       40 entries (4 per class: 3 TH entries, 1 LAB entry)")
     print(" - Time Grid:             5 days x 6 periods = 30 weekly periods per class")
     print(" - Total Workload:        300 curriculum periods across all classes")
     print(" - Resource Pools:        14 rooms (10 Theory, 4 Lab), 20 faculty (F1-F20)")

@@ -360,6 +360,7 @@ def schedule_timetable(
                     for p in range(1, tt.periods_per_day + 1)
                     if (slot := tt.get_assignment(class_name, day, p)) is not None
                     and slot.subject == subject.name
+                    and slot.faculty == subject.faculty
                 )
                 if subject.is_lab:
                     total_lab_sched += placed_count

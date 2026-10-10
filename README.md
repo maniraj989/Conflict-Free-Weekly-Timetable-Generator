@@ -213,23 +213,29 @@ The generator features a deterministic, reproducible scalability benchmark ([`st
 
 ### Benchmark Specification:
 - **Class Cohorts**: Exactly 10 student classes (`C1` through `C10`).
-- **Subject Entries**: Exactly 40 subject entries (4 per class: `TH1`, `TH2`, `TH3`, `LAB`).
+- **Subject Entries**: Exactly 40 subject entries (4 per class: 3 `TH` theory entries, 1 `LAB` laboratory entry).
+- **Subject Placeholders**: Strict assignment standard placeholders: `TH` for all theory subjects, `LAB` for laboratory subjects.
 - **Time Grid**: 5 days × 6 periods = 30 weekly periods per class.
 - **Total Workload**: Exactly 300 curriculum periods across all classes (100% capacity utilization).
+- **Curriculum per Class**:
+  - `TH` (Theory 1): 10 periods/week (`is_lab=0`)
+  - `TH` (Theory 2): 10 periods/week (`is_lab=0`)
+  - `TH` (Theory 3): 6 periods/week (`is_lab=0`)
+  - `LAB` (Laboratory): 4 periods/week (`is_lab=1`, scheduled as 2 blocks of 2 consecutive periods)
 - **Resource Pools**:
   - **14 Venues**: 10 Theory classrooms (`R1`–`R10`), 4 Laboratory venues (`L1`–`L4`).
-  - **20 Faculty**: Instructors `F1`–`F20` with staggered loads (≤ 20 periods/week), sharing teachers across cohorts (e.g., `F1` for `C1` and `C2`, `F6` for `C2` and `C3`) to stress clash detection.
+  - **20 Faculty**: Instructors `F1`–`F20` with staggered loads (≤ 20 periods/week), sharing teachers across cohorts (e.g., `F1` for `C1` and `C2`, `F6` for `C2` and `C3`) to thoroughly exercise clash detection.
 - **Lab Constraints**: Every class has `LAB` scheduled in two 2-consecutive-period blocks with identical faculty and lab room.
 
-### Benchmark Results (3 Consecutive Runs):
-Timing measured strictly via `time.perf_counter()` on standard hardware:
+### Benchmark Results & Complete Timing Metrics (3 Consecutive Runs):
+Timing measured strictly via `time.perf_counter()` on standard hardware without console output interference during scheduling:
 
-| Run Number | Search Status | Nodes Explored | Idle Gaps | Scheduled Periods | Scheduling Time | 5.0s Threshold | Independent Validation |
-| :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
-| **Run 1** | `OPTIMAL` | 280 nodes | 0 gaps | 300 / 300 (100%) | **1.9544 s** | Passed ($\le 5.0$s) | 8/8 Passed |
-| **Run 2** | `OPTIMAL` | 280 nodes | 0 gaps | 300 / 300 (100%) | **2.0697 s** | Passed ($\le 5.0$s) | 8/8 Passed |
-| **Run 3** | `OPTIMAL` | 280 nodes | 0 gaps | 300 / 300 (100%) | **2.2839 s** | Passed ($\le 5.0$s) | 8/8 Passed |
-| **Average** | `OPTIMAL` | 280 nodes | 0 gaps | 300 / 300 (100%) | **2.1027 s** | **PASS** | **100% Valid** |
+| Run Number | Search Status | Nodes Explored | Idle Gaps | Scheduled Periods | Parsing Time | Scheduling Time | Validation Time | Total End-to-End Time | 5.0s Threshold | Independent Validation |
+| :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
+| **Run 1** | `OPTIMAL` | 280 nodes | 0 gaps | 300 / 300 (100%) | 0.0002 s | **2.0527 s** | 0.0007 s | **2.0536 s** | Passed ($\le 5.0$s) | 8/8 Passed |
+| **Run 2** | `OPTIMAL` | 280 nodes | 0 gaps | 300 / 300 (100%) | 0.0002 s | **2.3584 s** | 0.0009 s | **2.3594 s** | Passed ($\le 5.0$s) | 8/8 Passed |
+| **Run 3** | `OPTIMAL` | 280 nodes | 0 gaps | 300 / 300 (100%) | 0.0001 s | **1.9647 s** | 0.0008 s | **1.9656 s** | Passed ($\le 5.0$s) | 8/8 Passed |
+| **Average** | `OPTIMAL` | 280 nodes | 0 gaps | 300 / 300 (100%) | 0.0002 s | **2.1253 s** | 0.0008 s | **2.1262 s** | **PASS** | **100% Valid** |
 
 ### Independent Hard-Constraint Validation:
 Every scheduled slot is independently validated after generation across all 8 hard constraints:

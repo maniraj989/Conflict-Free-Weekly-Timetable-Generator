@@ -152,13 +152,13 @@ def create_scheduling_units(parsed_data: ParsedData) -> List[SchedulingUnit]:
     units: List[SchedulingUnit] = []
 
     for class_name, group in parsed_data.classes.items():
-        for subject in group.subjects:
+        for sub_idx, subject in enumerate(group.subjects, start=1):
             if subject.is_lab:
                 num_blocks = subject.periods_per_week // 2
                 for block_idx in range(1, num_blocks + 1):
                     units.append(
                         SchedulingUnit(
-                            unit_id=f"{class_name}_{subject.name}_block{block_idx}",
+                            unit_id=f"{class_name}_{subject.name}_{sub_idx}_block{block_idx}",
                             class_name=class_name,
                             subject=subject,
                             is_lab=True,
@@ -170,7 +170,7 @@ def create_scheduling_units(parsed_data: ParsedData) -> List[SchedulingUnit]:
                 for period_idx in range(1, subject.periods_per_week + 1):
                     units.append(
                         SchedulingUnit(
-                            unit_id=f"{class_name}_{subject.name}_p{period_idx}",
+                            unit_id=f"{class_name}_{subject.name}_{sub_idx}_p{period_idx}",
                             class_name=class_name,
                             subject=subject,
                             is_lab=False,
